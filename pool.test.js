@@ -9,12 +9,16 @@ import {
   pocketTolerance,
   makeProbability,
   tableToSVG,
+  svgToTable,
   conePoints,
   BALL_RADIUS,
   POCKET_POS,
   SVG_HEIGHT,
   SVG_BORDER,
   SVG_SCALE,
+  SVG_WIDTH,
+  TABLE_WIDTH,
+  TABLE_HEIGHT,
 } from './pool.js';
 
 // ─── erfApprox ────────────────────────────────────────────────────────────────
@@ -306,6 +310,38 @@ describe('tableToSVG', () => {
     const [, y2] = tableToSVG(0, 20);
     // Higher table y → smaller SVG y (upward in SVG means decreasing y)
     expect(y2).toBeLessThan(y1);
+  });
+});
+
+// ─── svgToTable ───────────────────────────────────────────────────────────────
+
+describe('svgToTable', () => {
+  it('is the exact inverse of tableToSVG at several points', () => {
+    const points = [[0, 0], [TABLE_WIDTH, TABLE_HEIGHT], [50, 25], [10, 40], [90, 5]];
+    for (const [x, y] of points) {
+      const [rx, ry] = svgToTable(...tableToSVG(x, y));
+      expect(rx).toBeCloseTo(x, 10);
+      expect(ry).toBeCloseTo(y, 10);
+    }
+  });
+
+  it('round-trip: svgToTable(tableToSVG(x, y)) = [x, y]', () => {
+    const [x, y] = [37.5, 18.3];
+    const [rx, ry] = svgToTable(...tableToSVG(x, y));
+    expect(rx).toBeCloseTo(x, 10);
+    expect(ry).toBeCloseTo(y, 10);
+  });
+
+  it('SVG origin (0, 0) maps to above and left of the table felt', () => {
+    const [tx, ty] = svgToTable(0, 0);
+    expect(tx).toBeLessThan(0);
+    expect(ty).toBeGreaterThan(TABLE_HEIGHT);
+  });
+
+  it('SVG center maps to table center', () => {
+    const [tx, ty] = svgToTable(SVG_WIDTH / 2, SVG_HEIGHT / 2);
+    expect(tx).toBeCloseTo(TABLE_WIDTH / 2, 10);
+    expect(ty).toBeCloseTo(TABLE_HEIGHT / 2, 10);
   });
 });
 

@@ -161,3 +161,26 @@ input[type="range"] {
   background: #ffe066;
   border: 1px solid #c8a000;
 }
+
+/* ── Drag interactions ────────────────────────────────────────────────────── */
+
+.draggable {
+  cursor: grab;
+}
+
+#table-svg.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* Degenerate state warning */
+#degenerate-msg {
+  display: none;
+  background: #3a1a1a;
+  border: 1px solid #a03030;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: #e08080;
+  line-height: 1.4;
+}

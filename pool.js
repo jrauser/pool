@@ -215,6 +215,20 @@ export function tableToSVG(x, y) {
 }
 
 /**
+ * Inverse of tableToSVG: convert SVG pixel coordinates to table inches.
+ *
+ * @param {number} svgX - SVG x in pixels
+ * @param {number} svgY - SVG y in pixels
+ * @returns {[number, number]} - [tableX, tableY] in inches
+ */
+export function svgToTable(svgX, svgY) {
+  return [
+    (svgX - SVG_BORDER) / SVG_SCALE,
+    (SVG_HEIGHT - SVG_BORDER - svgY) / SVG_SCALE,
+  ];
+}
+
+/**
  * Compute the SVG polygon points string for an error cone (wedge).
  *
  * @param {number} originX  - SVG x of the cone apex (pixels)
@@ -268,7 +282,7 @@ function initApp() {
   felt.setAttribute('fill', '#1a6b2a');
   svg.appendChild(felt);
 
-  // Pocket geometry in SVG coordinates
+  // Pocket geometry in SVG coordinates (pocket is fixed — computed once)
   const [pocketSvgX, pocketSvgY] = tableToSVG(POCKET_POS[0], POCKET_POS[1]);
   const [aSvgX, aSvgY]      = tableToSVG(POCKET_RAIL_END_TOP[0],   POCKET_RAIL_END_TOP[1]);
   const [bSvgX, bSvgY]      = tableToSVG(POCKET_RAIL_END_RIGHT[0], POCKET_RAIL_END_RIGHT[1]);
@@ -318,14 +332,14 @@ function initApp() {
   targetLine.setAttribute('stroke-width', 3);
   svg.appendChild(targetLine);
 
-  // Aim line: cue ball → ghost ball (dashed)
+  // Aim line: cue ball → ghost ball (dashed, updated by updateGeometry)
   const aimLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   aimLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
   aimLine.setAttribute('stroke-width', 1.5);
   aimLine.setAttribute('stroke-dasharray', '6 4');
   svg.appendChild(aimLine);
 
-  // Travel line: object ball → pocket (dashed)
+  // Travel line: object ball → pocket (dashed, updated by updateGeometry)
   const travelLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   travelLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
   travelLine.setAttribute('stroke-width', 1.5);
@@ -361,6 +375,7 @@ function initApp() {
   cueBallEl.setAttribute('fill', 'white');
   cueBallEl.setAttribute('stroke', '#ccc');
   cueBallEl.setAttribute('stroke-width', 1);
+  cueBallEl.classList.add('draggable');
   svg.appendChild(cueBallEl);
 
   // Object ball
@@ -369,6 +384,7 @@ function initApp() {
   objBallEl.setAttribute('fill', '#ffe066');
   objBallEl.setAttribute('stroke', '#c8a000');
   objBallEl.setAttribute('stroke-width', 1);
+  objBallEl.classList.add('draggable');
   svg.appendChild(objBallEl);
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -377,40 +393,30 @@ function initApp() {
   const objPos = [...DEFAULT_OBJECT_BALL];
   const pocket = [...POCKET_POS];
 
-  const [cueSvgX, cueSvgY] = tableToSVG(cuePos[0], cuePos[1]);
-  const [objSvgX, objSvgY] = tableToSVG(objPos[0], objPos[1]);
+  // SVG coords for balls — updated by updateGeometry(), read by updateSlider()
+  let cueSvgX, cueSvgY, objSvgX, objSvgY, ghostSvgX, ghostSvgY;
 
-  // Place static balls
-  cueBallEl.setAttribute('cx', cueSvgX);
-  cueBallEl.setAttribute('cy', cueSvgY);
-  objBallEl.setAttribute('cx', objSvgX);
-  objBallEl.setAttribute('cy', objSvgY);
+  // ── Constraint helpers ─────────────────────────────────────────────────────
 
-  // Ghost ball position (table coords): O - 2R * normalize(pocket - O)
-  const opx = pocket[0] - objPos[0];
-  const opy = pocket[1] - objPos[1];
-  const opLen = Math.hypot(opx, opy);
-  const ghostX = objPos[0] - (2 * BALL_RADIUS * opx) / opLen;
-  const ghostY = objPos[1] - (2 * BALL_RADIUS * opy) / opLen;
-  const [ghostSvgX, ghostSvgY] = tableToSVG(ghostX, ghostY);
+  function clampToBounds(pos) {
+    return [
+      Math.max(BALL_RADIUS, Math.min(TABLE_WIDTH - BALL_RADIUS, pos[0])),
+      Math.max(BALL_RADIUS, Math.min(TABLE_HEIGHT - BALL_RADIUS, pos[1])),
+    ];
+  }
 
-  // Position ghost ball
-  ghostBallEl.setAttribute('cx', ghostSvgX);
-  ghostBallEl.setAttribute('cy', ghostSvgY);
+  function resolveOverlap(movingPos, fixedPos) {
+    const minDist = 2 * BALL_RADIUS;
+    const dx = movingPos[0] - fixedPos[0];
+    const dy = movingPos[1] - fixedPos[1];
+    const dist = Math.hypot(dx, dy);
+    if (dist >= minDist) return movingPos;
+    // Coincident edge case: push straight right
+    if (dist < 1e-9) return [fixedPos[0] + minDist, fixedPos[1]];
+    return [fixedPos[0] + (minDist * dx) / dist, fixedPos[1] + (minDist * dy) / dist];
+  }
 
-  // Aim line: cue ball → ghost ball
-  aimLine.setAttribute('x1', cueSvgX);
-  aimLine.setAttribute('y1', cueSvgY);
-  aimLine.setAttribute('x2', ghostSvgX);
-  aimLine.setAttribute('y2', ghostSvgY);
-
-  // Travel line: object ball → pocket
-  travelLine.setAttribute('x1', objSvgX);
-  travelLine.setAttribute('y1', objSvgY);
-  travelLine.setAttribute('x2', pocketSvgX);
-  travelLine.setAttribute('y2', pocketSvgY);
-
-  // ── Update function ────────────────────────────────────────────────────────
+  // ── DOM refs ───────────────────────────────────────────────────────────────
 
   const slider = document.getElementById('error-slider');
   const displayDeltaPhi = document.getElementById('display-delta-phi');
@@ -418,15 +424,44 @@ function initApp() {
   const displayCutAngle = document.getElementById('display-cut-angle');
   const displayDistance = document.getElementById('display-distance');
   const displayAlpha = document.getElementById('display-alpha');
+  const degenerateMsg = document.getElementById('degenerate-msg');
 
-  function update() {
+  // ── Render functions ───────────────────────────────────────────────────────
+
+  function updateGeometry() {
+    [cueSvgX, cueSvgY] = tableToSVG(cuePos[0], cuePos[1]);
+    [objSvgX, objSvgY] = tableToSVG(objPos[0], objPos[1]);
+
+    // Ghost ball: O - 2R * normalize(pocket - O)
+    const opx = pocket[0] - objPos[0];
+    const opy = pocket[1] - objPos[1];
+    const opLen = Math.hypot(opx, opy);
+    const ghostX = objPos[0] - (2 * BALL_RADIUS * opx) / opLen;
+    const ghostY = objPos[1] - (2 * BALL_RADIUS * opy) / opLen;
+    [ghostSvgX, ghostSvgY] = tableToSVG(ghostX, ghostY);
+
+    cueBallEl.setAttribute('cx', cueSvgX);
+    cueBallEl.setAttribute('cy', cueSvgY);
+    objBallEl.setAttribute('cx', objSvgX);
+    objBallEl.setAttribute('cy', objSvgY);
+    ghostBallEl.setAttribute('cx', ghostSvgX);
+    ghostBallEl.setAttribute('cy', ghostSvgY);
+
+    aimLine.setAttribute('x1', cueSvgX);
+    aimLine.setAttribute('y1', cueSvgY);
+    aimLine.setAttribute('x2', ghostSvgX);
+    aimLine.setAttribute('y2', ghostSvgY);
+
+    travelLine.setAttribute('x1', objSvgX);
+    travelLine.setAttribute('y1', objSvgY);
+    travelLine.setAttribute('x2', pocketSvgX);
+    travelLine.setAttribute('y2', pocketSvgY);
+  }
+
+  function updateSlider(phi, d, alpha) {
     const deltaPhiDeg = parseFloat(slider.value);
     const deltaPhiRad = (deltaPhiDeg * Math.PI) / 180;
     const sigma = deltaPhiRad / 1.96;
-
-    const phi = cutAngle(cuePos, objPos, pocket);
-    const d = Math.hypot(objPos[0] - cuePos[0], objPos[1] - cuePos[1]);
-    const alpha = pocketTolerance(objPos, pocket);
 
     const prob = makeProbability(d, phi, alpha, sigma);
     const dtRaw = deltaTheta(d, phi, deltaPhiRad);
@@ -438,34 +473,97 @@ function initApp() {
     displayDistance.textContent = d.toFixed(1) + '"';
     displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
 
-    // Cone geometry — direction from cue ball to ghost ball (SVG coords, y flipped)
+    // Cue cone: ±Δφ about the cue→ghost ball direction
     const cgSvgDx = ghostSvgX - cueSvgX;
     const cgSvgDy = ghostSvgY - cueSvgY;
-    const coneLen = Math.hypot(cgSvgDx, cgSvgDy) * 1.5;
+    const cueConeLen = Math.hypot(cgSvgDx, cgSvgDy) * 1.5;
     const cueDirAngle = Math.atan2(cgSvgDy, cgSvgDx);
 
-    // Cue cone: ±Δφ about the cue→ghost ball direction
     if (deltaPhiRad > 0) {
-      cueCone.setAttribute('points', conePoints(cueSvgX, cueSvgY, cueDirAngle, deltaPhiRad, coneLen));
+      cueCone.setAttribute('points', conePoints(cueSvgX, cueSvgY, cueDirAngle, deltaPhiRad, cueConeLen));
     } else {
       cueCone.setAttribute('points', '');
     }
 
-    // Direction from object ball to pocket (SVG coords)
+    // Object cone: ±Δθ about the object→pocket direction
     const opSvgDx = pocketSvgX - objSvgX;
     const opSvgDy = pocketSvgY - objSvgY;
-    const opLen = Math.hypot(opSvgDx, opSvgDy) * 1.5;
+    const objConeLen = Math.hypot(opSvgDx, opSvgDy) * 1.5;
     const opDirAngle = Math.atan2(opSvgDy, opSvgDx);
 
-    // Object cone: ±Δθ about the object→pocket direction
     if (Math.abs(deltaT) > 0) {
-      objCone.setAttribute('points', conePoints(objSvgX, objSvgY, opDirAngle, Math.abs(deltaT), opLen));
+      objCone.setAttribute('points', conePoints(objSvgX, objSvgY, opDirAngle, Math.abs(deltaT), objConeLen));
     } else {
       objCone.setAttribute('points', '');
     }
   }
 
-  slider.addEventListener('input', update);
-  update();
+  function redraw() {
+    const phi = cutAngle(cuePos, objPos, pocket);
+    const d = Math.hypot(objPos[0] - cuePos[0], objPos[1] - cuePos[1]);
+    const alpha = pocketTolerance(objPos, pocket);
+
+    updateGeometry();
+
+    if (phi >= Math.PI / 2) {
+      cueCone.setAttribute('points', '');
+      objCone.setAttribute('points', '');
+      displayMake.textContent = '\u2014';
+      displayCutAngle.textContent = ((phi * 180) / Math.PI).toFixed(1) + '\u00b0';
+      displayDistance.textContent = d.toFixed(1) + '"';
+      displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
+      displayDeltaPhi.textContent = parseFloat(slider.value).toFixed(2) + '\u00b0';
+      degenerateMsg.style.display = 'block';
+      return;
+    }
+
+    degenerateMsg.style.display = 'none';
+    updateSlider(phi, d, alpha);
+  }
+
+  // ── Drag ───────────────────────────────────────────────────────────────────
+
+  let dragging = null; // 'cue' | 'obj' | null
+
+  cueBallEl.addEventListener('mousedown', (e) => {
+    dragging = 'cue';
+    svg.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  objBallEl.addEventListener('mousedown', (e) => {
+    dragging = 'obj';
+    svg.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  svg.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const rect = svg.getBoundingClientRect();
+    let pos = clampToBounds(svgToTable(e.clientX - rect.left, e.clientY - rect.top));
+    if (dragging === 'cue') {
+      pos = resolveOverlap(pos, objPos);
+      cuePos[0] = pos[0];
+      cuePos[1] = pos[1];
+    } else {
+      pos = resolveOverlap(pos, cuePos);
+      objPos[0] = pos[0];
+      objPos[1] = pos[1];
+    }
+    redraw();
+  });
+
+  function stopDrag() {
+    dragging = null;
+    svg.classList.remove('dragging');
+  }
+
+  svg.addEventListener('mouseup', stopDrag);
+  svg.addEventListener('mouseleave', stopDrag);
+
+  // ── Initial render ─────────────────────────────────────────────────────────
+
+  slider.addEventListener('input', redraw);
+  redraw();
 }
 /* v8 ignore stop */
