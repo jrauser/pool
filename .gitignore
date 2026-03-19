@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+node_install_log
+# Files derived from current_picture.md must never be committed
+current_picture.md
+implementation_notes.md

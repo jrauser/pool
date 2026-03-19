@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080 --directory .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0"
+  }
+}

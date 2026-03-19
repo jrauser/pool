@@ -1,0 +1,163 @@
+/* pool.css — Pool Shot Margin Visualizer styles */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 16px 24px;
+  background: #1a1a1a;
+  color: #e8e8e8;
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+h1 {
+  margin: 0 0 16px 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #f0f0f0;
+}
+
+#layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+#table-container {
+  flex-shrink: 0;
+}
+
+#table-svg {
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Control panel ────────────────────────────────────────────────────────── */
+
+#controls {
+  flex: 1;
+  min-width: 220px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Make % display */
+#make-display {
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+#make-display .label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.big-number {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #7ec8e3;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slider group */
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-group label {
+  font-size: 0.85rem;
+  color: #ccc;
+  font-weight: 500;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #7ec8e3;
+  cursor: pointer;
+}
+
+.slider-readout {
+  font-size: 0.85rem;
+  color: #aaa;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shot info */
+#shot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #2e2e2e;
+  padding-bottom: 6px;
+}
+
+.info-label {
+  color: #888;
+}
+
+.info-value {
+  color: #e0e0e0;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Legend */
+#legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.blue-swatch {
+  background: rgba(60, 130, 255, 0.5);
+  border: 1px solid rgba(60, 130, 255, 0.8);
+}
+
+.red-swatch {
+  background: rgba(255, 60, 60, 0.5);
+  border: 1px solid rgba(255, 60, 60, 0.8);
+}
+
+.yellow-swatch {
+  background: #ffe066;
+  border: 1px solid #c8a000;
+}

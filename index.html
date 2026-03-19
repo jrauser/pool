@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pool Shot Margin Visualizer</title>
+  <link rel="stylesheet" href="pool.css" />
+</head>
+<body>
+  <h1>Pool Shot Margin Visualizer</h1>
+
+  <div id="layout">
+    <!-- Table visualization -->
+    <div id="table-container">
+      <svg id="table-svg" role="img" aria-label="Pool table diagram"></svg>
+    </div>
+
+    <!-- Control panel -->
+    <div id="controls">
+      <div id="make-display">
+        <div class="label">Make probability</div>
+        <div id="display-make" class="big-number">—</div>
+      </div>
+
+      <div class="control-group">
+        <label for="error-slider">
+          Execution error (Δφ) 95% interval
+        </label>
+        <input
+          type="range"
+          id="error-slider"
+          min="0"
+          max="2"
+          step="0.01"
+          value="1"
+        />
+        <div class="slider-readout">
+          Δφ = <span id="display-delta-phi">—</span>
+        </div>
+      </div>
+
+      <div id="shot-info">
+        <div class="info-row">
+          <span class="info-label">Cut angle φ</span>
+          <span id="display-cut-angle" class="info-value">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Shot distance d</span>
+          <span id="display-distance" class="info-value">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Pocket tolerance α</span>
+          <span id="display-alpha" class="info-value">—</span>
+        </div>
+      </div>
+
+      <div id="legend">
+        <div class="legend-item">
+          <span class="legend-swatch blue-swatch"></span>
+          Aim error cone (±Δφ)
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch red-swatch"></span>
+          Ball direction error (±Δθ)
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch yellow-swatch"></span>
+          Effective pocket window
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="pool.js"></script>
+</body>
+</html>
