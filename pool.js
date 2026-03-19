@@ -85,28 +85,25 @@ export function cutAngle(cuePos, objPos, pocketPos) {
   const opy = pocketPos[1] - objPos[1];
   const opLen = Math.hypot(opx, opy);
 
-  // Ghost ball position: O + 2R * normalize(O - pocket)
+  // Ghost ball position: O - 2R * normalize(pocket - O)
   const gx = objPos[0] - (2 * BALL_RADIUS * opx) / opLen;
   const gy = objPos[1] - (2 * BALL_RADIUS * opy) / opLen;
 
-  // Vector C→O
-  const cox = objPos[0] - cuePos[0];
-  const coy = objPos[1] - cuePos[1];
-
-  // Vector C→G
+  // Cut angle = angle at ghost ball between aim line (C→G) and line of centers (G→O)
+  // For a straight-in shot these are parallel → φ = 0.
   const cgx = gx - cuePos[0];
   const cgy = gy - cuePos[1];
+  const gox = objPos[0] - gx;
+  const goy = objPos[1] - gy;
 
-  const coLen = Math.hypot(cox, coy);
   const cgLen = Math.hypot(cgx, cgy);
+  const goLen = Math.hypot(gox, goy); // = 2R
 
-  // φ = arcsin(|cross product| / (|CO| * |CG|))
-  // Cross product magnitude: cox*cgy - coy*cgx
-  const cross = cox * cgy - coy * cgx;
-  const sinPhi = Math.abs(cross) / (coLen * cgLen);
+  const dot = cgx * gox + cgy * goy;
+  const cosPhi = dot / (cgLen * goLen);
 
   // Clamp to [-1,1] to guard against floating-point drift
-  return Math.asin(Math.min(1, Math.max(-1, sinPhi)));
+  return Math.acos(Math.min(1, Math.max(-1, cosPhi)));
 }
 
 /**
@@ -295,7 +292,7 @@ function initApp() {
   facingA.setAttribute('x1', aSvgX);
   facingA.setAttribute('y1', aSvgY);
   facingA.setAttribute('x2', aSvgX + f38Cos * facingLen);
-  facingA.setAttribute('y2', aSvgY + f38Sin * facingLen); // SVG y down = table -y
+  facingA.setAttribute('y2', aSvgY - f38Sin * facingLen); // SVG y down = table -y
   facingA.setAttribute('stroke', '#5a3a1a');
   facingA.setAttribute('stroke-width', 2);
   svg.appendChild(facingA);
@@ -321,12 +318,19 @@ function initApp() {
   targetLine.setAttribute('stroke-width', 3);
   svg.appendChild(targetLine);
 
-  // Shot line (cue ball → pocket), faint dashed
-  const shotLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  shotLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
-  shotLine.setAttribute('stroke-width', 1.5);
-  shotLine.setAttribute('stroke-dasharray', '6 4');
-  svg.appendChild(shotLine);
+  // Aim line: cue ball → ghost ball (dashed)
+  const aimLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  aimLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+  aimLine.setAttribute('stroke-width', 1.5);
+  aimLine.setAttribute('stroke-dasharray', '6 4');
+  svg.appendChild(aimLine);
+
+  // Travel line: object ball → pocket (dashed)
+  const travelLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  travelLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+  travelLine.setAttribute('stroke-width', 1.5);
+  travelLine.setAttribute('stroke-dasharray', '6 4');
+  svg.appendChild(travelLine);
 
   // Error cone from cue ball (blue, ±Δφ)
   const cueCone = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -341,6 +345,15 @@ function initApp() {
   objCone.setAttribute('stroke', 'rgba(255,60,60,0.6)');
   objCone.setAttribute('stroke-width', 1);
   svg.appendChild(objCone);
+
+  // Ghost ball (dashed outline showing where cue ball contacts object ball)
+  const ghostBallEl = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  ghostBallEl.setAttribute('r', BALL_RADIUS * SVG_SCALE);
+  ghostBallEl.setAttribute('fill', 'none');
+  ghostBallEl.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+  ghostBallEl.setAttribute('stroke-width', 1);
+  ghostBallEl.setAttribute('stroke-dasharray', '4 3');
+  svg.appendChild(ghostBallEl);
 
   // Cue ball
   const cueBallEl = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -373,11 +386,29 @@ function initApp() {
   objBallEl.setAttribute('cx', objSvgX);
   objBallEl.setAttribute('cy', objSvgY);
 
-  // Shot line: from cue ball to pocket (passes through obj ball)
-  shotLine.setAttribute('x1', cueSvgX);
-  shotLine.setAttribute('y1', cueSvgY);
-  shotLine.setAttribute('x2', pocketSvgX);
-  shotLine.setAttribute('y2', pocketSvgY);
+  // Ghost ball position (table coords): O - 2R * normalize(pocket - O)
+  const opx = pocket[0] - objPos[0];
+  const opy = pocket[1] - objPos[1];
+  const opLen = Math.hypot(opx, opy);
+  const ghostX = objPos[0] - (2 * BALL_RADIUS * opx) / opLen;
+  const ghostY = objPos[1] - (2 * BALL_RADIUS * opy) / opLen;
+  const [ghostSvgX, ghostSvgY] = tableToSVG(ghostX, ghostY);
+
+  // Position ghost ball
+  ghostBallEl.setAttribute('cx', ghostSvgX);
+  ghostBallEl.setAttribute('cy', ghostSvgY);
+
+  // Aim line: cue ball → ghost ball
+  aimLine.setAttribute('x1', cueSvgX);
+  aimLine.setAttribute('y1', cueSvgY);
+  aimLine.setAttribute('x2', ghostSvgX);
+  aimLine.setAttribute('y2', ghostSvgY);
+
+  // Travel line: object ball → pocket
+  travelLine.setAttribute('x1', objSvgX);
+  travelLine.setAttribute('y1', objSvgY);
+  travelLine.setAttribute('x2', pocketSvgX);
+  travelLine.setAttribute('y2', pocketSvgY);
 
   // ── Update function ────────────────────────────────────────────────────────
 
@@ -407,13 +438,13 @@ function initApp() {
     displayDistance.textContent = d.toFixed(1) + '"';
     displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
 
-    // Cone geometry — direction from cue ball to object ball (SVG coords, y flipped)
-    const coSvgDx = objSvgX - cueSvgX;
-    const coSvgDy = objSvgY - cueSvgY;
-    const coneLen = Math.hypot(coSvgDx, coSvgDy) * 1.5;
-    const cueDirAngle = Math.atan2(coSvgDy, coSvgDx);
+    // Cone geometry — direction from cue ball to ghost ball (SVG coords, y flipped)
+    const cgSvgDx = ghostSvgX - cueSvgX;
+    const cgSvgDy = ghostSvgY - cueSvgY;
+    const coneLen = Math.hypot(cgSvgDx, cgSvgDy) * 1.5;
+    const cueDirAngle = Math.atan2(cgSvgDy, cgSvgDx);
 
-    // Cue cone: ±Δφ about the cue→object direction
+    // Cue cone: ±Δφ about the cue→ghost ball direction
     if (deltaPhiRad > 0) {
       cueCone.setAttribute('points', conePoints(cueSvgX, cueSvgY, cueDirAngle, deltaPhiRad, coneLen));
     } else {
