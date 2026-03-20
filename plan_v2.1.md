@@ -4,7 +4,7 @@
 
 Replace the fixed 2.5" effective pocket opening with a dynamic target size
 that varies with the object ball's approach angle, as specified in
-`corner_pocket_target_size_spec.md` (based on TP 3.6).
+`reference/corner_pocket_target_size_spec.md` (based on TP 3.6).
 
 When the user drags the object ball, the yellow target line should change
 in width, position, and orientation to reflect the actual effective target
@@ -21,7 +21,7 @@ underlying math is substantial:
 - A 4-branch piecewise assembly for s_left(θ)
 - Numerical edge cases throughout
 
-The side pocket spec (`side_pocket_target_size_spec.md`) shares several
+The side pocket spec (`reference/side_pocket_target_size_spec.md`) shares several
 base equations but is not needed yet — the only target pocket is the
 upper-right corner. We'll structure the code so the shared functions can
 be reused later.

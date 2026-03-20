@@ -1,6 +1,6 @@
 # Pool Shot Margin Visualizer
 
-An interactive web page that builds visual intuition for the mathematics of pool shot execution error. Based on the analysis in *TP_3-4.pdf*.
+An interactive web page that builds visual intuition for the mathematics of pool shot execution error. Based on the analysis in *reference/TP_3-4.pdf*.
 
 ## What it does
 
@@ -12,7 +12,7 @@ The page shows a 9-foot pool table with a cue ball and object ball. A slider con
 
 ## The math
 
-Given a cut angle φ, shot distance d, and execution error Δφ, the angular error in the object ball's direction is (from TP_3-4.pdf, valid when d >> R):
+Given a cut angle φ, shot distance d, and execution error Δφ, the angular error in the object ball's direction is (from reference/TP_3-4.pdf, valid when d >> R):
 
 ```
 Δθ(d, φ, Δφ) = φ − Δφ + arcsin( (d / 2R)·sin(Δφ) − sin(φ − Δφ) )

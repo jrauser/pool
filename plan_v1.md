@@ -65,7 +65,7 @@ Given cue ball position C and object ball position O:
 
 ## Core Math
 
-### Formula (from TP_3-4.pdf)
+### Formula (from reference/TP_3-4.pdf)
 
 Execution error Δφ in the shooter's aim causes an error Δθ in the object ball's direction:
 

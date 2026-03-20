@@ -148,7 +148,7 @@ When CIT compensation is on, the ghost ball shifts to cancel throw. The rotation
 
 ### Throw direction was initially inverted
 
-The original `object_ball_throw_spec.md` described positive throw as the "overcut" direction. This is wrong: friction drags the OB *toward* the CB's path (the undercut direction, making the shot play as though hit fuller). The spec was corrected, but the code's rotation sign was not updated, causing the thrown travel line to deflect the wrong way. Fixed by inverting `rotSign` in the three places that apply throw to the geometry (ghost ball compensation, thrown travel line, and red cone offset).
+The original `reference/object_ball_throw_spec.md` described positive throw as the "overcut" direction. This is wrong: friction drags the OB *toward* the CB's path (the undercut direction, making the shot play as though hit fuller). The spec was corrected, but the code's rotation sign was not updated, causing the thrown travel line to deflect the wrong way. Fixed by inverting `rotSign` in the three places that apply throw to the geometry (ghost ball compensation, thrown travel line, and red cone offset).
 
 ### Speed-independence at small cut angles is stun-specific
 

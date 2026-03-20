@@ -7,7 +7,7 @@ object ball away from the "theoretical" cut-angle direction due to friction
 during the collision. The effect is speed-dependent (slower shots throw
 more) and substantial enough to change whether shots are makeable.
 
-The math is specified in `object_ball_throw_spec.md` (TP A-14).
+The math is specified in `reference/object_ball_throw_spec.md` (TP A-14).
 
 ## Scope
 
