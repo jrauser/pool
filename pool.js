@@ -2,6 +2,7 @@
 // All angles are in radians internally; degrees only for display.
 
 import { createCornerPocketCalculator } from './pocket_geometry.js';
+import { throwAngleNaturalRoll, SPEEDS } from './throw.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ function findDeltaPhiMax(d, phi, alpha) {
 }
 
 /**
- * Probability of making the shot.
+ * Probability of making the shot (no throw offset — symmetric case).
  *
  * @param {number} d     - Shot distance (inches)
  * @param {number} phi   - Cut angle (radians)
@@ -225,6 +226,176 @@ export function makeProbability(d, phi, alpha, sigma) {
   if (sigma <= 0) return 1;
   const deltaPhiMax = findDeltaPhiMax(d, phi, alpha);
   return erfApprox(deltaPhiMax / (sigma * Math.SQRT2));
+}
+
+/**
+ * Normal CDF: Φ(x) = (1 + erf(x/√2)) / 2
+ *
+ * @param {number} x
+ * @returns {number}
+ */
+export function normalCDF(x) {
+  return (1 + erfApprox(x / Math.SQRT2)) / 2;
+}
+
+/**
+ * Find the Δφ where Δθ(Δφ) = target, using bisection over [lo, hi].
+ * Returns null if Δθ never reaches target within the interval.
+ *
+ * @param {number} d      - Shot distance (inches)
+ * @param {number} phi    - Cut angle (radians)
+ * @param {number} target - Target Δθ value (radians)
+ * @param {number} lo     - Lower bound of search (radians)
+ * @param {number} hi     - Upper bound of search (radians)
+ * @returns {number|null} - Δφ where Δθ ≈ target, or null
+ */
+function bisectDeltaPhi(d, phi, target, lo, hi) {
+  const ITERS = 60;
+  const dtLo = deltaTheta(d, phi, lo);
+  const dtHi = deltaTheta(d, phi, hi);
+  if (dtLo === null || dtHi === null) return null;
+  // Check target is between dtLo and dtHi
+  if ((dtLo - target) * (dtHi - target) > 0) return null;
+  for (let i = 0; i < ITERS; i++) {
+    const mid = (lo + hi) / 2;
+    const dt = deltaTheta(d, phi, mid);
+    if (dt === null) { hi = mid; continue; }
+    if ((dt - target) * (dtLo - target) <= 0) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Find the most negative Δφ such that deltaTheta(d, phi, Δφ) is defined.
+ *
+ * @param {number} d   - Shot distance (inches)
+ * @param {number} phi - Cut angle (radians)
+ * @returns {number}   - Negative domain boundary of deltaPhi in radians
+ */
+function findDeltaPhiDomainMin(d, phi) {
+  const ITERS = 60;
+  let lo = -Math.PI / 2;
+  let hi = 0;
+  if (deltaTheta(d, phi, lo) !== null) return lo;
+  for (let i = 0; i < ITERS; i++) {
+    const mid = (lo + hi) / 2;
+    if (deltaTheta(d, phi, mid) !== null) {
+      hi = mid; // mid is valid, try more negative
+    } else {
+      lo = mid; // mid is invalid, try less negative
+    }
+  }
+  // hi is the most negative valid value
+  return hi;
+}
+
+/**
+ * Probability of making the shot with a throw offset.
+ *
+ * The OB direction error is Δθ(Δφ) + throwOffset. The shot is made when
+ * this falls within [-alpha, alpha]. Since Δθ is monotonic in Δφ, the
+ * makeable Δφ interval is contiguous. We find its boundaries by bisecting
+ * for the two Δθ targets: alpha - throwOffset and -alpha - throwOffset.
+ *
+ * @param {number} d           - Shot distance (inches)
+ * @param {number} phi         - Cut angle (radians)
+ * @param {number} alpha       - Pocket tolerance (radians)
+ * @param {number} sigma       - Standard deviation of execution error (radians)
+ * @param {number} throwOffset - Throw angle offset (radians, positive = overcut)
+ * @returns {number} - Probability in [0, 1]
+ */
+export function makeProbabilityWithThrow(d, phi, alpha, sigma, throwOffset) {
+  if (sigma <= 0) {
+    return Math.abs(throwOffset) <= alpha ? 1 : 0;
+  }
+  if (Math.abs(throwOffset) < 1e-12) {
+    return makeProbability(d, phi, alpha, sigma);
+  }
+
+  // The makeable condition is -alpha ≤ Δθ(Δφ) + throwOffset ≤ alpha,
+  // i.e., Δθ(Δφ) ∈ [-alpha - throwOffset, alpha - throwOffset].
+  const dtUpper = alpha - throwOffset;
+  const dtLower = -alpha - throwOffset;
+
+  // Domain of Δφ where deltaTheta is defined
+  const domainMin = findDeltaPhiDomainMin(d, phi);
+  const domainMax = findDeltaPhiDomainMax(d, phi);
+
+  // Δθ at domain boundaries
+  const dtAtMin = deltaTheta(d, phi, domainMin);
+  const dtAtMax = deltaTheta(d, phi, domainMax);
+  if (dtAtMin === null || dtAtMax === null) {
+    // Shouldn't happen, but guard
+    return 0;
+  }
+
+  // Find Δφ where Δθ = dtUpper (the "overcut" boundary)
+  let phiHi;
+  if (dtAtMax <= dtUpper) {
+    phiHi = domainMax; // entire upper domain is within tolerance
+  } else if (dtAtMin >= dtUpper) {
+    return 0; // Δθ always exceeds upper bound
+  } else {
+    phiHi = bisectDeltaPhi(d, phi, dtUpper, domainMin, domainMax);
+    if (phiHi === null) return 0;
+  }
+
+  // Find Δφ where Δθ = dtLower (the "undercut" boundary)
+  let phiLo;
+  if (dtAtMin >= dtLower) {
+    phiLo = domainMin; // entire lower domain is within tolerance
+  } else if (dtAtMax <= dtLower) {
+    return 0; // Δθ always below lower bound
+  } else {
+    phiLo = bisectDeltaPhi(d, phi, dtLower, domainMin, domainMax);
+    if (phiLo === null) return 0;
+  }
+
+  if (phiHi < phiLo) return 0;
+
+  return normalCDF(phiHi / sigma) - normalCDF(phiLo / sigma);
+}
+
+// 5-point Gauss-Hermite quadrature nodes and weights for ∫f(x)exp(-x²)dx.
+// Symmetric: nodes[0]=0, nodes[±1]≈±0.9586, nodes[±2]≈±2.0202.
+const GH_NODES = [0, 0.9585724646138185, -0.9585724646138185, 2.0201828704560856, -2.0201828704560856];
+const GH_WEIGHTS = [0.9453087204829419, 0.3936193231522412, 0.3936193231522412, 0.01995324205904591, 0.01995324205904591];
+
+/**
+ * Probability of making the shot with CIT compensation and compensation error.
+ *
+ * The player aims to fully cancel throw, but their compensation fraction
+ * varies shot-to-shot: C ~ N(1, σ_frac²). The residual throw is
+ * θ_throw × (1 - C) ~ N(0, (σ_frac × θ_throw)²).
+ *
+ * We integrate makeProbabilityWithThrow over this distribution using
+ * 5-point Gauss-Hermite quadrature.
+ *
+ * @param {number} d          - Shot distance (inches)
+ * @param {number} phi        - Cut angle (radians)
+ * @param {number} alpha      - Pocket tolerance (radians)
+ * @param {number} sigma      - Execution error std dev (radians)
+ * @param {number} throwAngle - Throw angle θ_throw (radians)
+ * @param {number} sigmaFrac  - Std dev of compensation fraction (dimensionless)
+ * @returns {number} - Probability in [0, 1]
+ */
+export function makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, sigmaFrac) {
+  const sigmaCitAngle = sigmaFrac * throwAngle;
+  if (sigmaCitAngle < 1e-12) {
+    return makeProbability(d, phi, alpha, sigma);
+  }
+
+  // E[f(X)] where X ~ N(0, σ²) = (1/√π) Σ wᵢ f(√2 σ xᵢ)
+  let prob = 0;
+  for (let i = 0; i < GH_NODES.length; i++) {
+    const residualThrow = Math.SQRT2 * sigmaCitAngle * GH_NODES[i];
+    prob += GH_WEIGHTS[i] * makeProbabilityWithThrow(d, phi, alpha, sigma, residualThrow);
+  }
+  return prob / Math.sqrt(Math.PI);
 }
 
 // ─── Rendering helpers (pure, exported for testability) ───────────────────────
@@ -365,12 +536,18 @@ function initApp() {
   aimLine.setAttribute('stroke-dasharray', '6 4');
   svg.appendChild(aimLine);
 
-  // Travel line: object ball → pocket (dashed, updated by updateGeometry)
-  const travelLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  travelLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
-  travelLine.setAttribute('stroke-width', 1.5);
-  travelLine.setAttribute('stroke-dasharray', '6 4');
-  svg.appendChild(travelLine);
+  // Ideal travel line: object ball → pocket (always shown, faint when throw active)
+  const idealTravelLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  idealTravelLine.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+  idealTravelLine.setAttribute('stroke-width', 1.5);
+  idealTravelLine.setAttribute('stroke-dasharray', '6 4');
+  svg.appendChild(idealTravelLine);
+
+  // Thrown travel line: shows actual OB direction with throw (solid, orange-ish)
+  const thrownTravelLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  thrownTravelLine.setAttribute('stroke', 'rgba(255,160,60,0.6)');
+  thrownTravelLine.setAttribute('stroke-width', 1.5);
+  svg.appendChild(thrownTravelLine);
 
   // Error cone from cue ball (blue, ±Δφ)
   const cueCone = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -451,20 +628,89 @@ function initApp() {
   const displayDistance = document.getElementById('display-distance');
   const displayAlpha = document.getElementById('display-alpha');
   const displayTargetSize = document.getElementById('display-target-size');
+  const displayThrow = document.getElementById('display-throw');
   const degenerateMsg = document.getElementById('degenerate-msg');
+
+  // CIT controls
+  const speedToggle = document.getElementById('speed-toggle');
+  const citAdjustToggle = document.getElementById('cit-adjust-toggle');
+  const citAccuracyGroup = document.getElementById('cit-accuracy-group');
+  const citSlider = document.getElementById('cit-slider');
+  const displayCitError = document.getElementById('display-cit-error');
+
+  let selectedSpeed = 'medium';
+
+  // Speed toggle button handler
+  speedToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-speed]');
+    if (!btn) return;
+    speedToggle.querySelector('.active').classList.remove('active');
+    btn.classList.add('active');
+    selectedSpeed = btn.dataset.speed;
+    redraw();
+  });
+
+  // CIT adjustment toggle
+  citAdjustToggle.addEventListener('change', () => {
+    citAccuracyGroup.style.display = citAdjustToggle.checked ? '' : 'none';
+    redraw();
+  });
+
+  citSlider.addEventListener('input', redraw);
 
   // ── Render functions ───────────────────────────────────────────────────────
 
-  function updateGeometry(targetSize, targetOffset) {
+  /**
+   * Compute the ghost ball position for a given aim direction.
+   * The ghost ball sits at O - 2R * aimDir, where aimDir is the unit vector
+   * from the object ball toward the pocket (or a rotated version for CIT).
+   */
+  function ghostBallPosition(aimDirX, aimDirY) {
+    return [
+      objPos[0] - 2 * BALL_RADIUS * aimDirX,
+      objPos[1] - 2 * BALL_RADIUS * aimDirY,
+    ];
+  }
+
+  function updateGeometry(targetSize, targetOffset, tThrow, citAdjust) {
     [cueSvgX, cueSvgY] = tableToSVG(cuePos[0], cuePos[1]);
     [objSvgX, objSvgY] = tableToSVG(objPos[0], objPos[1]);
 
-    // Ghost ball: O - 2R * normalize(pocket - O)
+    // Direction from object ball to pocket (unit vector, table coords)
     const opx = pocket[0] - objPos[0];
     const opy = pocket[1] - objPos[1];
     const opLen = Math.hypot(opx, opy);
-    const ghostX = objPos[0] - (2 * BALL_RADIUS * opx) / opLen;
-    const ghostY = objPos[1] - (2 * BALL_RADIUS * opy) / opLen;
+    const opDirX = opx / opLen;
+    const opDirY = opy / opLen;
+
+    // Ghost ball aim direction: rotate line-of-centers by θ_throw if compensating.
+    // Throw deflects OB in the undercut direction (toward the cue ball's path,
+    // making the shot play as though hit fuller). To compensate, the ghost ball
+    // must shift so the line of centers, after throw, points at the pocket.
+    // Rotation by tThrow around the object ball rotates the aim direction.
+    let aimDirX, aimDirY;
+    if (citAdjust && tThrow > 0) {
+      // Throw drags the OB toward the CB's path (undercut direction, i.e., a
+      // fuller hit). To compensate, rotate the aim toward a thinner cut so that
+      // after throw the OB ends up pocket-bound.
+      const cosT = Math.cos(tThrow);
+      const sinT = Math.sin(tThrow);
+      // Determine undercut rotation direction from cue ball position.
+      // Throw drags the OB toward the CB's path (undercut direction).
+      // Cross product of (OB→pocket) × (OB→cue) gives the rotation sense;
+      // we negate it because throw is toward the CB, not away from it.
+      const ocx = cuePos[0] - objPos[0];
+      const ocy = cuePos[1] - objPos[1];
+      const cross = opDirX * ocy - opDirY * ocx;
+      const rotSign = cross >= 0 ? -1 : 1;
+      aimDirX = opDirX * cosT - rotSign * opDirY * sinT;
+      aimDirY = rotSign * opDirX * sinT + opDirY * cosT;
+    } else {
+      aimDirX = opDirX;
+      aimDirY = opDirY;
+    }
+
+    const [ghostX, ghostY] = ghostBallPosition(aimDirX, aimDirY);
     [ghostSvgX, ghostSvgY] = tableToSVG(ghostX, ghostY);
 
     cueBallEl.setAttribute('cx', cueSvgX);
@@ -479,18 +725,41 @@ function initApp() {
     aimLine.setAttribute('x2', ghostSvgX);
     aimLine.setAttribute('y2', ghostSvgY);
 
-    travelLine.setAttribute('x1', objSvgX);
-    travelLine.setAttribute('y1', objSvgY);
-    travelLine.setAttribute('x2', pocketSvgX);
-    travelLine.setAttribute('y2', pocketSvgY);
+    // Ideal travel line: OB → pocket (always shown)
+    idealTravelLine.setAttribute('x1', objSvgX);
+    idealTravelLine.setAttribute('y1', objSvgY);
+    idealTravelLine.setAttribute('x2', pocketSvgX);
+    idealTravelLine.setAttribute('y2', pocketSvgY);
+
+    // Thrown travel line: shows actual OB direction with throw (when not compensating)
+    if (!citAdjust && tThrow > 0) {
+      idealTravelLine.setAttribute('stroke', 'rgba(255,255,255,0.15)'); // dim the ideal
+      // Rotate pocket direction by throw angle to show actual OB path
+      const cosT = Math.cos(tThrow);
+      const sinT = Math.sin(tThrow);
+      const ocx = cuePos[0] - objPos[0];
+      const ocy = cuePos[1] - objPos[1];
+      const cross = opDirX * ocy - opDirY * ocx;
+      const rotSign = cross >= 0 ? -1 : 1;
+      const thrownDirX = opDirX * cosT - rotSign * opDirY * sinT;
+      const thrownDirY = rotSign * opDirX * sinT + opDirY * cosT;
+      const thrownEndX = objPos[0] + thrownDirX * opLen;
+      const thrownEndY = objPos[1] + thrownDirY * opLen;
+      const [teSvgX, teSvgY] = tableToSVG(thrownEndX, thrownEndY);
+      thrownTravelLine.setAttribute('x1', objSvgX);
+      thrownTravelLine.setAttribute('y1', objSvgY);
+      thrownTravelLine.setAttribute('x2', teSvgX);
+      thrownTravelLine.setAttribute('y2', teSvgY);
+      thrownTravelLine.style.display = '';
+    } else {
+      idealTravelLine.setAttribute('stroke', 'rgba(255,255,255,0.35)'); // full brightness
+      thrownTravelLine.style.display = 'none';
+    }
 
     // Dynamic target line: aligned with pocket mouth, shifted by offset.
-    // Pocket mouth direction in table coords: perpendicular to diagonal = (-1,1)/√2
-    // In SVG coords (y flipped): (-1,-1)/√2
     const perpX = -1 / Math.SQRT2;
     const perpY = 1 / Math.SQRT2; // table coords (y up)
     const halfTarget = targetSize / 2;
-    // Offset shifts the center along the pocket mouth
     const centerX = pocket[0] + targetOffset * perpX;
     const centerY = pocket[1] + targetOffset * perpY;
     const [t1x, t1y] = tableToSVG(centerX - halfTarget * perpX, centerY - halfTarget * perpY);
@@ -501,14 +770,39 @@ function initApp() {
     targetLine.setAttribute('y2', t2y);
   }
 
-  function updateSlider(phi, d, alpha, targetSize) {
+  function updateSlider(phi, d, alpha, targetSize, tThrow, citAdjust) {
     const deltaPhiDeg = parseFloat(slider.value);
     const deltaPhiRad = (deltaPhiDeg * Math.PI) / 180;
     const sigma = deltaPhiRad / 1.96;
 
-    const prob = makeProbability(d, phi, alpha, sigma);
-    const dtRaw = deltaTheta(d, phi, deltaPhiRad);
-    const deltaT = dtRaw !== null ? dtRaw : alpha; // clamp for display
+    let prob;
+    let citPercent = 0;
+    if (citAdjust) {
+      // CIT compensation on: player aims for 100% throw compensation,
+      // but accuracy varies as a % of the throw angle.
+      citPercent = parseFloat(citSlider.value);
+      const sigmaFrac = (citPercent / 100) / 1.96;
+      prob = makeProbabilityWithCIT(d, phi, alpha, sigma, tThrow, sigmaFrac);
+      displayCitError.textContent = citPercent.toFixed(0) + '%';
+    } else {
+      // CIT compensation off: throw shifts the error distribution
+      prob = makeProbabilityWithThrow(d, phi, alpha, sigma, tThrow);
+    }
+
+    // Cone half-angle: combine execution error and CIT error in Δθ space.
+    let deltaT;
+    if (citAdjust) {
+      // Execution error contribution in Δθ space
+      const dtExec = deltaTheta(d, phi, deltaPhiRad);
+      const dtExecVal = dtExec !== null ? dtExec : alpha;
+      // CIT error contribution directly in Δθ space (95% value)
+      const dtCit95 = (citPercent / 100) * tThrow;
+      // Combine in quadrature — both are now in the same space
+      deltaT = Math.hypot(dtExecVal, dtCit95);
+    } else {
+      const dtRaw = deltaTheta(d, phi, deltaPhiRad);
+      deltaT = dtRaw !== null ? dtRaw : alpha;
+    }
 
     displayDeltaPhi.textContent = deltaPhiDeg.toFixed(2) + '\u00b0';
     displayMake.textContent = (prob * 100).toFixed(1) + '%';
@@ -516,6 +810,7 @@ function initApp() {
     displayDistance.textContent = d.toFixed(1) + '"';
     displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
     displayTargetSize.textContent = targetSize.toFixed(2) + '"';
+    displayThrow.textContent = ((tThrow * 180) / Math.PI).toFixed(2) + '\u00b0';
 
     // Cue cone: ±Δφ about the cue→ghost ball direction
     const cgSvgDx = ghostSvgX - cueSvgX;
@@ -529,16 +824,39 @@ function initApp() {
       cueCone.setAttribute('points', '');
     }
 
-    // Object cone: ±Δθ about the object→pocket direction
+    // Object cone: centered on the thrown direction (compensation off)
+    // or the pocket direction (compensation on), with appropriate width
     const opSvgDx = pocketSvgX - objSvgX;
     const opSvgDy = pocketSvgY - objSvgY;
     const objConeLen = Math.hypot(opSvgDx, opSvgDy) * 1.5;
     const opDirAngle = Math.atan2(opSvgDy, opSvgDx);
 
-    if (Math.abs(deltaT) > 0) {
-      objCone.setAttribute('points', conePoints(objSvgX, objSvgY, opDirAngle, Math.abs(deltaT), objConeLen));
+    if (!citAdjust && tThrow > 0) {
+      // Cone centered on thrown direction
+      // Determine the rotation sign (same logic as updateGeometry)
+      const opx = pocket[0] - objPos[0];
+      const opy = pocket[1] - objPos[1];
+      const opLen2 = Math.hypot(opx, opy);
+      const opuX = opx / opLen2;
+      const opuY = opy / opLen2;
+      const ocx = cuePos[0] - objPos[0];
+      const ocy = cuePos[1] - objPos[1];
+      const cross = opuX * ocy - opuY * ocx;
+      const rotSign = cross >= 0 ? -1 : 1;
+      // In SVG coords, y is flipped, so the rotation sign flips too
+      const thrownDirAngle = opDirAngle - rotSign * tThrow;
+      if (Math.abs(deltaT) > 0) {
+        objCone.setAttribute('points', conePoints(objSvgX, objSvgY, thrownDirAngle, Math.abs(deltaT), objConeLen));
+      } else {
+        objCone.setAttribute('points', '');
+      }
     } else {
-      objCone.setAttribute('points', '');
+      // Cone centered on pocket direction
+      if (Math.abs(deltaT) > 0) {
+        objCone.setAttribute('points', conePoints(objSvgX, objSvgY, opDirAngle, Math.abs(deltaT), objConeLen));
+      } else {
+        objCone.setAttribute('points', '');
+      }
     }
   }
 
@@ -546,8 +864,13 @@ function initApp() {
     const phi = cutAngle(cuePos, objPos, pocket);
     const d = Math.hypot(objPos[0] - cuePos[0], objPos[1] - cuePos[1]);
     const { alpha, targetSize, offset } = pocketTolerance(objPos, pocket);
+    const citAdjust = citAdjustToggle.checked;
 
-    updateGeometry(targetSize, offset);
+    // Compute throw angle for current speed and cut angle
+    const speed = SPEEDS[selectedSpeed].mps;
+    const tThrow = throwAngleNaturalRoll(speed, phi);
+
+    updateGeometry(targetSize, offset, tThrow, citAdjust);
 
     if (phi >= Math.PI / 2) {
       cueCone.setAttribute('points', '');
@@ -557,13 +880,15 @@ function initApp() {
       displayDistance.textContent = d.toFixed(1) + '"';
       displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
       displayTargetSize.textContent = targetSize.toFixed(2) + '"';
+      displayThrow.textContent = '\u2014';
       displayDeltaPhi.textContent = parseFloat(slider.value).toFixed(2) + '\u00b0';
       degenerateMsg.style.display = 'block';
+      thrownTravelLine.style.display = 'none';
       return;
     }
 
     degenerateMsg.style.display = 'none';
-    updateSlider(phi, d, alpha, targetSize);
+    updateSlider(phi, d, alpha, targetSize, tThrow, citAdjust);
   }
 
   // ── Drag ───────────────────────────────────────────────────────────────────
@@ -605,6 +930,40 @@ function initApp() {
 
   svg.addEventListener('mouseup', stopDrag);
   svg.addEventListener('mouseleave', stopDrag);
+
+  // ── Info popups ────────────────────────────────────────────────────────────
+
+  const infoPopup = document.getElementById('info-popup');
+  const infoPopupText = document.getElementById('info-popup-text');
+  const controlsEl = document.getElementById('controls');
+
+  controlsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.info-btn');
+    if (!btn) {
+      infoPopup.style.display = 'none';
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const text = btn.dataset.info;
+    // Toggle off if clicking the same icon
+    if (infoPopup.style.display !== 'none' && infoPopupText.textContent === text) {
+      infoPopup.style.display = 'none';
+      return;
+    }
+    infoPopupText.textContent = text;
+    const btnRect = btn.getBoundingClientRect();
+    const ctrlRect = controlsEl.getBoundingClientRect();
+    infoPopup.style.left = Math.max(0, btnRect.left - ctrlRect.left) + 'px';
+    infoPopup.style.top = (btnRect.bottom - ctrlRect.top + 6) + 'px';
+    infoPopup.style.display = '';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#controls')) {
+      infoPopup.style.display = 'none';
+    }
+  });
 
   // ── Initial render ─────────────────────────────────────────────────────────
 

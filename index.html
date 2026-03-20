@@ -18,13 +18,13 @@
     <!-- Control panel -->
     <div id="controls">
       <div id="make-display">
-        <div class="label">Make probability</div>
+        <div class="label">Make probability <span class="info-btn" data-info="The probability of pocketing the ball given the current execution error, throw, and compensation settings. Accounts for the full Gaussian error distribution.">&#9432;</span></div>
         <div id="display-make" class="big-number">—</div>
       </div>
 
       <div class="control-group">
         <label for="error-slider">
-          Execution error (Δφ) 95% interval
+          Execution error (Δφ) 95% interval <span class="info-btn" data-info="The shooter's aiming precision. This is the 95% confidence interval of the cue ball's direction error, modeled as a Gaussian. At 1°, 95% of shots land within ±1° of the intended aim.">&#9432;</span>
         </label>
         <input
           type="range"
@@ -39,22 +39,59 @@
         </div>
       </div>
 
+      <div class="control-group">
+        <label>Shot speed <span class="info-btn" data-info="The cue ball's speed at impact. Slower shots produce more throw (collision-induced deflection). Values are 1, 3, and 7 mph.">&#9432;</span></label>
+        <div class="toggle-group" id="speed-toggle">
+          <button data-speed="slow">Slow (1)</button>
+          <button data-speed="medium" class="active">Medium (3)</button>
+          <button data-speed="fast">Fast (7)</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label class="toggle-label">
+          <input type="checkbox" id="cit-adjust-toggle" />
+          Adjust aim for throw <span class="info-btn" data-info="When on, the player adjusts their aim to compensate for collision-induced throw. The ghost ball shifts to the compensated position.">&#9432;</span>
+        </label>
+      </div>
+
+      <div class="control-group" id="cit-accuracy-group" style="display:none">
+        <label for="cit-slider">
+          Throw compensation accuracy 95% interval <span class="info-btn" data-info="How precisely the player compensates for throw, as a percentage of the full throw angle. At 10%, the player's compensation accuracy has a 95% confidence interval of ±10% of the throw angle.">&#9432;</span>
+        </label>
+        <input
+          type="range"
+          id="cit-slider"
+          min="0"
+          max="30"
+          step="1"
+          value="10"
+        />
+        <div class="slider-readout">
+          <span id="display-cit-error">—</span>
+        </div>
+      </div>
+
       <div id="shot-info">
         <div class="info-row">
-          <span class="info-label">Cut angle φ</span>
+          <span class="info-label">Cut angle φ <span class="info-btn" data-info="The angle between the cue ball's aim direction and the line through the ball centers. 0° is a straight-in shot; larger angles are thinner cuts.">&#9432;</span></span>
           <span id="display-cut-angle" class="info-value">—</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Shot distance d</span>
+          <span class="info-label">Shot distance d <span class="info-btn" data-info="The distance between the cue ball and object ball centers.">&#9432;</span></span>
           <span id="display-distance" class="info-value">—</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Pocket tolerance α</span>
+          <span class="info-label">Pocket tolerance α <span class="info-btn" data-info="The half-angle of the effective pocket opening as seen from the object ball. Larger values mean a more forgiving shot.">&#9432;</span></span>
           <span id="display-alpha" class="info-value">—</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Target size</span>
+          <span class="info-label">Target size <span class="info-btn" data-info="The effective width of the pocket opening, accounting for ball radius and approach angle. Varies as the object ball moves.">&#9432;</span></span>
           <span id="display-target-size" class="info-value">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Throw <span class="info-btn" data-info="Collision-induced throw: the angular deflection of the object ball due to friction during the collision. Depends on cut angle and shot speed.">&#9432;</span></span>
+          <span id="display-throw" class="info-value">—</span>
         </div>
       </div>
 
@@ -75,6 +112,14 @@
           <span class="legend-swatch yellow-swatch"></span>
           Effective pocket window
         </div>
+        <div class="legend-item">
+          <span class="legend-swatch throw-swatch"></span>
+          Actual OB path (with throw)
+        </div>
+      </div>
+
+      <div id="info-popup" class="info-popup" style="display:none">
+        <span id="info-popup-text"></span>
       </div>
     </div>
   </div>

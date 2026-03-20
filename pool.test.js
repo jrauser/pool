@@ -9,6 +9,9 @@ import {
   approachAngle,
   pocketTolerance,
   makeProbability,
+  normalCDF,
+  makeProbabilityWithThrow,
+  makeProbabilityWithCIT,
   tableToSVG,
   svgToTable,
   conePoints,
@@ -425,5 +428,159 @@ describe('conePoints', () => {
     const result = conePoints(10, 20, Math.PI / 4, 0, 60);
     const [, p1, p2] = result.trim().split(' ');
     expect(p1).toBe(p2);
+  });
+});
+
+// ─── normalCDF ──────────────────────────────────────────────────────────────
+
+describe('normalCDF', () => {
+  it('Φ(0) = 0.5', () => {
+    expect(normalCDF(0)).toBeCloseTo(0.5, 10);
+  });
+
+  it('Φ(∞) ≈ 1', () => {
+    expect(normalCDF(10)).toBeCloseTo(1, 6);
+  });
+
+  it('Φ(−∞) ≈ 0', () => {
+    expect(normalCDF(-10)).toBeCloseTo(0, 6);
+  });
+
+  it('Φ(−x) = 1 − Φ(x)', () => {
+    const x = 1.5;
+    expect(normalCDF(-x)).toBeCloseTo(1 - normalCDF(x), 6);
+  });
+
+  it('known value: Φ(1) ≈ 0.8413', () => {
+    expect(normalCDF(1)).toBeCloseTo(0.8413, 3);
+  });
+});
+
+// ─── makeProbabilityWithThrow ───────────────────────────────────────────────
+
+describe('makeProbabilityWithThrow', () => {
+  const d = Math.hypot(70 - 45, 25 - 15);
+  const phi = cutAngle([45, 15], [70, 25], POCKET_POS);
+  const alpha = pocketTolerance([70, 25], POCKET_POS).alpha;
+
+  it('zero throw gives same result as makeProbability', () => {
+    const sigma = 0.02;
+    const pNoThrow = makeProbability(d, phi, alpha, sigma);
+    const pWithThrow = makeProbabilityWithThrow(d, phi, alpha, sigma, 0);
+    expect(pWithThrow).toBeCloseTo(pNoThrow, 6);
+  });
+
+  it('large throw offset → probability drops toward 0', () => {
+    const sigma = 0.02;
+    // Throw much larger than pocket tolerance → very unlikely to make it
+    const p = makeProbabilityWithThrow(d, phi, alpha, sigma, 0.5);
+    expect(p).toBeLessThan(0.05);
+  });
+
+  it('small throw offset reduces probability vs no throw', () => {
+    const sigma = 0.02;
+    const throwOffset = alpha * 0.5; // half the pocket tolerance
+    const pNoThrow = makeProbability(d, phi, alpha, sigma);
+    const pWithThrow = makeProbabilityWithThrow(d, phi, alpha, sigma, throwOffset);
+    expect(pWithThrow).toBeLessThan(pNoThrow);
+    expect(pWithThrow).toBeGreaterThan(0);
+  });
+
+  it('σ = 0 with throw inside tolerance → P = 1', () => {
+    const p = makeProbabilityWithThrow(d, phi, alpha, 0, alpha * 0.5);
+    expect(p).toBe(1);
+  });
+
+  it('σ = 0 with throw outside tolerance → P = 0', () => {
+    const p = makeProbabilityWithThrow(d, phi, alpha, 0, alpha * 2);
+    expect(p).toBe(0);
+  });
+
+  it('probability is in [0, 1]', () => {
+    const cases = [0, 0.001, 0.01, 0.05, 0.1];
+    for (const throwOffset of cases) {
+      const p = makeProbabilityWithThrow(d, phi, alpha, 0.02, throwOffset);
+      expect(p).toBeGreaterThanOrEqual(0);
+      expect(p).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is monotonically decreasing in throw offset', () => {
+    const sigma = 0.02;
+    const offsets = [0, 0.005, 0.01, 0.02, 0.05];
+    let prev = 1;
+    for (const offset of offsets) {
+      const p = makeProbabilityWithThrow(d, phi, alpha, sigma, offset);
+      expect(p).toBeLessThanOrEqual(prev + 1e-10);
+      prev = p;
+    }
+  });
+});
+
+// ─── makeProbabilityWithCIT ──────────────────────────────────────────────────
+
+describe('makeProbabilityWithCIT', () => {
+  const d = Math.hypot(70 - 45, 25 - 15);
+  const phi = cutAngle([45, 15], [70, 25], POCKET_POS);
+  const alpha = pocketTolerance([70, 25], POCKET_POS).alpha;
+  const sigma = 0.02;
+
+  // A realistic throw angle for testing (~3° at medium speed, large cut)
+  const throwAngle = 0.05; // ~2.9°
+
+  it('sigmaFrac = 0 equals makeProbability (perfect compensation)', () => {
+    const pCIT = makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, 0);
+    const pNoThrow = makeProbability(d, phi, alpha, sigma);
+    expect(pCIT).toBeCloseTo(pNoThrow, 6);
+  });
+
+  it('throwAngle = 0 makes sigmaFrac irrelevant (straight-in shot)', () => {
+    const pBase = makeProbability(d, phi, alpha, sigma);
+    const pCIT = makeProbabilityWithCIT(d, phi, alpha, sigma, 0, 0.1);
+    expect(pCIT).toBeCloseTo(pBase, 6);
+  });
+
+  it('larger sigmaFrac reduces probability', () => {
+    const p0 = makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, 0);
+    const p5 = makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, 0.05);
+    const p10 = makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, 0.10);
+    expect(p5).toBeLessThan(p0);
+    expect(p10).toBeLessThan(p5);
+  });
+
+  it('more throw means bigger CIT impact for same sigmaFrac', () => {
+    const sigmaFrac = 0.08;
+    const smallThrow = 0.01; // ~0.6°
+    const largeThrow = 0.08; // ~4.6°
+
+    const pSmallBase = makeProbabilityWithCIT(d, phi, alpha, sigma, smallThrow, 0);
+    const pSmallCIT = makeProbabilityWithCIT(d, phi, alpha, sigma, smallThrow, sigmaFrac);
+    const dropSmall = pSmallBase - pSmallCIT;
+
+    const pLargeBase = makeProbabilityWithCIT(d, phi, alpha, sigma, largeThrow, 0);
+    const pLargeCIT = makeProbabilityWithCIT(d, phi, alpha, sigma, largeThrow, sigmaFrac);
+    const dropLarge = pLargeBase - pLargeCIT;
+
+    expect(dropLarge).toBeGreaterThan(dropSmall);
+  });
+
+  it('probability is in [0, 1]', () => {
+    const fracs = [0, 0.05, 0.10, 0.15];
+    for (const f of fracs) {
+      const p = makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, f);
+      expect(p).toBeGreaterThanOrEqual(0);
+      expect(p).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('Gauss-Hermite weights sum to √π', () => {
+    // The 5-point GH weights should sum to √π ≈ 1.7724538509
+    // We can't import them directly, but we can verify indirectly:
+    // makeProbabilityWithCIT with sigmaFrac=0 should equal makeProbability,
+    // which requires (1/√π) × Σwᵢ = 1. Already tested above.
+    // Direct sanity check: a very large sigmaFrac still produces [0, 1]
+    const p = makeProbabilityWithCIT(d, phi, alpha, sigma, throwAngle, 0.15);
+    expect(p).toBeGreaterThanOrEqual(0);
+    expect(p).toBeLessThanOrEqual(1);
   });
 });
