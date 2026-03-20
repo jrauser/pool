@@ -6,6 +6,7 @@ import {
   erfApprox,
   deltaTheta,
   cutAngle,
+  approachAngle,
   pocketTolerance,
   makeProbability,
   tableToSVG,
@@ -183,31 +184,75 @@ describe('cutAngle', () => {
   });
 });
 
+// ─── approachAngle ───────────────────────────────────────────────────────────
+
+describe('approachAngle', () => {
+  it('θ = 0 when approaching along the 45° diagonal', () => {
+    // Object ball on the diagonal from pocket (equal dx, dy)
+    const theta = approachAngle([80, 30], [100, 50]);
+    expect(theta).toBeCloseTo(0, 8);
+  });
+
+  it('θ > 0 when approaching from the long-rail side', () => {
+    // Object ball far below the diagonal — approach is more horizontal
+    const theta = approachAngle([80, 10], [100, 50]);
+    expect(theta).toBeGreaterThan(0);
+  });
+
+  it('θ < 0 when approaching from the short-rail side', () => {
+    // Object ball far left of the diagonal — approach is more vertical
+    const theta = approachAngle([50, 45], [100, 50]);
+    expect(theta).toBeLessThan(0);
+  });
+
+  it('magnitude stays within ~45°', () => {
+    // Various positions around the table
+    const positions = [[80, 10], [50, 45], [30, 30], [90, 20]];
+    for (const pos of positions) {
+      const theta = approachAngle(pos, [100, 50]);
+      expect(Math.abs(theta)).toBeLessThan(Math.PI / 2);
+    }
+  });
+});
+
 // ─── pocketTolerance ─────────────────────────────────────────────────────────
 
 describe('pocketTolerance', () => {
-  it('matches the arctan formula exactly', () => {
+  it('returns an object with alpha, targetSize, and offset', () => {
+    const result = pocketTolerance([70, 25], [100, 50]);
+    expect(result).toHaveProperty('alpha');
+    expect(result).toHaveProperty('targetSize');
+    expect(result).toHaveProperty('offset');
+  });
+
+  it('alpha = atan(targetSize/2 / distance)', () => {
     const obj = [70, 25];
     const pocket = [100, 50];
+    const result = pocketTolerance(obj, pocket);
     const dop = Math.hypot(pocket[0] - obj[0], pocket[1] - obj[1]);
-    const expected = Math.atan(1.25 / dop);
-    expect(pocketTolerance(obj, pocket)).toBeCloseTo(expected, 10);
+    const expected = Math.atan((result.targetSize / 2) / dop);
+    expect(result.alpha).toBeCloseTo(expected, 10);
   });
 
   it('far from pocket → small α', () => {
-    const far = pocketTolerance([10, 5], [100, 50]);
-    const close = pocketTolerance([95, 48], [100, 50]);
+    const far = pocketTolerance([10, 5], [100, 50]).alpha;
+    const close = pocketTolerance([95, 48], [100, 50]).alpha;
     expect(far).toBeLessThan(close);
   });
 
-  it('close to pocket → larger α', () => {
-    const alpha = pocketTolerance([99, 49.5], [100, 50]);
-    // Very close: D ≈ 1.12", α = arctan(1.25/1.12) > 45°
-    expect(alpha).toBeGreaterThan(Math.PI / 4);
+  it('target size is positive', () => {
+    expect(pocketTolerance([50, 25], [100, 50]).targetSize).toBeGreaterThan(0);
   });
 
-  it('values are positive', () => {
-    expect(pocketTolerance([50, 25], [100, 50])).toBeGreaterThan(0);
+  it('target size varies with approach angle', () => {
+    // Balls on the diagonal vs along the rail should give different target sizes
+    const diagonal = pocketTolerance([70, 20], [100, 50]);
+    const nearRail = pocketTolerance([95, 25], [100, 50]);
+    expect(diagonal.targetSize).not.toBeCloseTo(nearRail.targetSize, 1);
+  });
+
+  it('alpha is positive', () => {
+    expect(pocketTolerance([50, 25], [100, 50]).alpha).toBeGreaterThan(0);
   });
 });
 
@@ -216,7 +261,7 @@ describe('pocketTolerance', () => {
 describe('makeProbability', () => {
   const d = Math.hypot(70 - 45, 25 - 15);
   const phi = cutAngle([45, 15], [70, 25], POCKET_POS);
-  const alpha = pocketTolerance([70, 25], POCKET_POS);
+  const alpha = pocketTolerance([70, 25], POCKET_POS).alpha;
 
   it('σ → 0 → P ≈ 1 (for a makeable shot)', () => {
     // A very tiny sigma means the shooter is nearly perfect → should make it

@@ -1,14 +1,15 @@
 // pool.js — Pool Shot Margin Visualizer
 // All angles are in radians internally; degrees only for display.
 
+import { createCornerPocketCalculator } from './pocket_geometry.js';
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const BALL_RADIUS = 1.125; // inches
 export const TABLE_WIDTH = 100;   // inches
 export const TABLE_HEIGHT = 50;   // inches
 export const TABLE_CORNER = [TABLE_WIDTH, TABLE_HEIGHT]; // upper-right table corner
-export const POCKET_MOUTH_WIDTH = 4.5;           // inches, BCA standard
-export const EFFECTIVE_POCKET_HALF_WIDTH = 1.25; // inches (half of 2.5" effective opening)
+export const POCKET_MOUTH_WIDTH = 4.5;  // inches, BCA standard
 // At a 45° corner, each rail ends this far from the corner to give a 4.5" mouth
 const POCKET_SHELF = POCKET_MOUTH_WIDTH / Math.SQRT2;
 // The two points where the cushions end — the edges of the pocket mouth
@@ -107,16 +108,47 @@ export function cutAngle(cuePos, objPos, pocketPos) {
 }
 
 /**
- * Angular pocket tolerance: the half-angle subtended by the effective pocket
- * opening (2.5", half = 1.25") from the object ball.
+ * Compute the approach angle θ for a corner pocket.
+ * θ is measured from the pocket centerline (the 45° bisector of the corner).
+ * θ = 0 means straight into the pocket along the diagonal.
+ * θ > 0 means approach from the long-rail side.
+ * θ < 0 means approach from the short-rail side.
  *
  * @param {[number,number]} objPos    - [x, y] object ball (inches)
  * @param {[number,number]} pocketPos - [x, y] pocket (inches)
- * @returns {number} - α in radians
+ * @returns {number} - θ in radians
+ */
+export function approachAngle(objPos, pocketPos) {
+  const dx = pocketPos[0] - objPos[0];
+  const dy = pocketPos[1] - objPos[1];
+  // Direction from object ball to pocket in table coords (y up)
+  const angle = Math.atan2(dy, dx);
+  // Pocket centerline is at 45° (π/4) for upper-right corner
+  // Subtract to get θ relative to centerline
+  return angle - Math.PI / 4;
+}
+
+// Corner pocket target size calculator (precomputed critical angles)
+const cornerCalc = createCornerPocketCalculator({
+  R: BALL_RADIUS,
+  p: POCKET_MOUTH_WIDTH,
+  L: TABLE_WIDTH,
+});
+
+/**
+ * Angular pocket tolerance: the half-angle subtended by the effective pocket
+ * opening from the object ball, using the dynamic target size model.
+ *
+ * @param {[number,number]} objPos    - [x, y] object ball (inches)
+ * @param {[number,number]} pocketPos - [x, y] pocket (inches)
+ * @returns {{ alpha: number, targetSize: number, offset: number }}
  */
 export function pocketTolerance(objPos, pocketPos) {
   const dop = Math.hypot(pocketPos[0] - objPos[0], pocketPos[1] - objPos[1]);
-  return Math.atan(EFFECTIVE_POCKET_HALF_WIDTH / dop);
+  const theta = approachAngle(objPos, pocketPos);
+  const { s, offset } = cornerCalc(theta);
+  const alpha = Math.atan((s / 2) / dop);
+  return { alpha, targetSize: s, offset };
 }
 
 /**
@@ -320,14 +352,8 @@ function initApp() {
   facingB.setAttribute('stroke-width', 2);
   svg.appendChild(facingB);
 
-  // Effective 2.5" target: segment centered at pocket mouth, perpendicular to the diagonal.
-  // In table coords the perpendicular to (1,1)/√2 is (−1,1)/√2; in SVG (y down) → (−1,−1)/√2.
-  const halfTargetPx = (EFFECTIVE_POCKET_HALF_WIDTH / Math.SQRT2) * SVG_SCALE;
+  // Effective target line: updated dynamically by updateGeometry()
   const targetLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  targetLine.setAttribute('x1', pocketSvgX - halfTargetPx);
-  targetLine.setAttribute('y1', pocketSvgY - halfTargetPx);
-  targetLine.setAttribute('x2', pocketSvgX + halfTargetPx);
-  targetLine.setAttribute('y2', pocketSvgY + halfTargetPx);
   targetLine.setAttribute('stroke', '#ffe066');
   targetLine.setAttribute('stroke-width', 3);
   svg.appendChild(targetLine);
@@ -424,11 +450,12 @@ function initApp() {
   const displayCutAngle = document.getElementById('display-cut-angle');
   const displayDistance = document.getElementById('display-distance');
   const displayAlpha = document.getElementById('display-alpha');
+  const displayTargetSize = document.getElementById('display-target-size');
   const degenerateMsg = document.getElementById('degenerate-msg');
 
   // ── Render functions ───────────────────────────────────────────────────────
 
-  function updateGeometry() {
+  function updateGeometry(targetSize, targetOffset) {
     [cueSvgX, cueSvgY] = tableToSVG(cuePos[0], cuePos[1]);
     [objSvgX, objSvgY] = tableToSVG(objPos[0], objPos[1]);
 
@@ -456,9 +483,25 @@ function initApp() {
     travelLine.setAttribute('y1', objSvgY);
     travelLine.setAttribute('x2', pocketSvgX);
     travelLine.setAttribute('y2', pocketSvgY);
+
+    // Dynamic target line: aligned with pocket mouth, shifted by offset.
+    // Pocket mouth direction in table coords: perpendicular to diagonal = (-1,1)/√2
+    // In SVG coords (y flipped): (-1,-1)/√2
+    const perpX = -1 / Math.SQRT2;
+    const perpY = 1 / Math.SQRT2; // table coords (y up)
+    const halfTarget = targetSize / 2;
+    // Offset shifts the center along the pocket mouth
+    const centerX = pocket[0] + targetOffset * perpX;
+    const centerY = pocket[1] + targetOffset * perpY;
+    const [t1x, t1y] = tableToSVG(centerX - halfTarget * perpX, centerY - halfTarget * perpY);
+    const [t2x, t2y] = tableToSVG(centerX + halfTarget * perpX, centerY + halfTarget * perpY);
+    targetLine.setAttribute('x1', t1x);
+    targetLine.setAttribute('y1', t1y);
+    targetLine.setAttribute('x2', t2x);
+    targetLine.setAttribute('y2', t2y);
   }
 
-  function updateSlider(phi, d, alpha) {
+  function updateSlider(phi, d, alpha, targetSize) {
     const deltaPhiDeg = parseFloat(slider.value);
     const deltaPhiRad = (deltaPhiDeg * Math.PI) / 180;
     const sigma = deltaPhiRad / 1.96;
@@ -472,6 +515,7 @@ function initApp() {
     displayCutAngle.textContent = ((phi * 180) / Math.PI).toFixed(1) + '\u00b0';
     displayDistance.textContent = d.toFixed(1) + '"';
     displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
+    displayTargetSize.textContent = targetSize.toFixed(2) + '"';
 
     // Cue cone: ±Δφ about the cue→ghost ball direction
     const cgSvgDx = ghostSvgX - cueSvgX;
@@ -501,9 +545,9 @@ function initApp() {
   function redraw() {
     const phi = cutAngle(cuePos, objPos, pocket);
     const d = Math.hypot(objPos[0] - cuePos[0], objPos[1] - cuePos[1]);
-    const alpha = pocketTolerance(objPos, pocket);
+    const { alpha, targetSize, offset } = pocketTolerance(objPos, pocket);
 
-    updateGeometry();
+    updateGeometry(targetSize, offset);
 
     if (phi >= Math.PI / 2) {
       cueCone.setAttribute('points', '');
@@ -512,13 +556,14 @@ function initApp() {
       displayCutAngle.textContent = ((phi * 180) / Math.PI).toFixed(1) + '\u00b0';
       displayDistance.textContent = d.toFixed(1) + '"';
       displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
+      displayTargetSize.textContent = targetSize.toFixed(2) + '"';
       displayDeltaPhi.textContent = parseFloat(slider.value).toFixed(2) + '\u00b0';
       degenerateMsg.style.display = 'block';
       return;
     }
 
     degenerateMsg.style.display = 'none';
-    updateSlider(phi, d, alpha);
+    updateSlider(phi, d, alpha, targetSize);
   }
 
   // ── Drag ───────────────────────────────────────────────────────────────────

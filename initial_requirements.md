@@ -1,3 +1,4 @@
+# V1 sketch
 
 The document TP_3-4.pdf contains a mathematical analysis of the margin for error of a pool shot based on distance and cut angle.  I would like to make a web page that gives the viewer visual intuition for the mathematics.
 
@@ -15,6 +16,19 @@ As the user slides the slider, a shaded region grows or shinks between the cue b
 
 In the future we might add friction and therefore the effect of cut induced throw.  Even further in the future we might add side spin and spin induced throw.  In the even further future, maybe quirt and swerve, but these seem difficult to model.
 
-# Corner pocket rendering
+## Corner pocket rendering
 
 The [BCA specifies](https://www.classicbilliards.net/cushions-supplies/bca-pocket-specs.html) that the mouth of a pocket is between 4 1/8" and 5 1/8".  Let's say our pockets are the standard 4 1/2".  The angle between the rail and the pocket facing is specificed to be 142 degrees.  This gives the position and orientation of the target area.  As discussed above we'll say the target is 2.5 inches wide.  In the future we might account for the fact that the target width changes as the ball entrance angle varies.  
+
+# V2: Draggable balls
+
+Version 2 was draggable balls.  See plan_v2.md.
+
+# V2.1: dynamic pocket size
+
+The size, orientation and position of the target area changes with the position of the object ball as described in TP3-5.pdf and TP3-6.pdf.
+
+Separately, I've had Claude translate these into markdown specifications corner_pocket_target_size_spec.md, which refernces side_pocket_target_size_spec.md.  
+
+I'd like the target area's size, position and orientation to update as the user drags the object ball around.  
+
