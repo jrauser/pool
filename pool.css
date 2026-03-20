@@ -40,6 +40,7 @@ h1 {
 /* ── Control panel ────────────────────────────────────────────────────────── */
 
 #controls {
+  position: relative;
   flex: 1;
   min-width: 220px;
   max-width: 320px;
@@ -162,6 +163,59 @@ input[type="range"] {
   border: 1px solid #c8a000;
 }
 
+.throw-swatch {
+  background: rgba(255, 160, 60, 0.6);
+  border: 1px solid rgba(255, 160, 60, 0.8);
+}
+
+/* Toggle group (speed selector) */
+.toggle-group {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #3a3a3a;
+}
+
+.toggle-group button {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: #252525;
+  color: #aaa;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-group button:not(:last-child) {
+  border-right: 1px solid #3a3a3a;
+}
+
+.toggle-group button:hover {
+  background: #333;
+}
+
+.toggle-group button.active {
+  background: #3a5a7a;
+  color: #e8e8e8;
+  font-weight: 600;
+}
+
+/* Checkbox toggle */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  accent-color: #7ec8e3;
+  cursor: pointer;
+}
+
 /* ── Drag interactions ────────────────────────────────────────────────────── */
 
 .draggable {
@@ -183,4 +237,29 @@ input[type="range"] {
   font-size: 0.82rem;
   color: #e08080;
   line-height: 1.4;
+}
+
+/* ─── Info popups ──────────────────────────────────────────────────────────── */
+
+.info-btn {
+  cursor: pointer;
+  opacity: 0.4;
+  margin-left: 3px;
+  font-size: 0.85em;
+  user-select: none;
+}
+.info-btn:hover { opacity: 0.85; }
+
+.info-popup {
+  position: absolute;
+  background: #2e2e2e;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 10px 14px;
+  max-width: 280px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #ddd;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }

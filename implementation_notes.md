@@ -127,3 +127,35 @@ The model is only valid for |θ| ≲ 45°. Beyond that, `sLeftRailMaxAngle` can 
 ### pocketTolerance return type change
 
 `pocketTolerance()` previously returned a plain number (α in radians). It now returns `{ alpha, targetSize, offset }`. This required updating all call sites and the existing test suite.
+
+---
+
+## V3: Collision-Induced Throw
+
+### Throw module
+
+The CIT math lives in `throw.js` (~85 lines, 4 exported functions). It implements the TP A-14 model restricted to natural roll (ω_x = v/R) and no sidespin (ω_z = 0). The Marlow exponential friction fit is verified against the three calibration points from the paper.
+
+### Asymmetric make probability
+
+With throw, the OB direction is offset from the pocket center, making the acceptance region for Δφ asymmetric. The original `makeProbability` used a single bisection (exploiting symmetry). The new `makeProbabilityWithThrow` uses two bisections via `bisectDeltaPhi` to find the Δφ values where Δθ equals each pocket edge (α − throwOffset and −α − throwOffset), then uses the normal CDF: P = Φ(Δφ_hi/σ) − Φ(Δφ_lo/σ).
+
+An initial attempt using outward search from Δφ=0 failed when throwOffset > α, because Δφ=0 is outside the makeable region. The bisect-for-Δθ-targets approach handles all cases correctly.
+
+### Ghost ball rotation for CIT compensation
+
+When CIT compensation is on, the ghost ball shifts to cancel throw. The rotation direction (which way to shift the aim) depends on which side of the line-of-centers the cue ball sits. This is determined by the cross product of (OB→pocket) × (OB→cue). The same sign logic is used for the thrown travel line and the offset red cone.
+
+### Throw direction was initially inverted
+
+The original `object_ball_throw_spec.md` described positive throw as the "overcut" direction. This is wrong: friction drags the OB *toward* the CB's path (the undercut direction, making the shot play as though hit fuller). The spec was corrected, but the code's rotation sign was not updated, causing the thrown travel line to deflect the wrong way. Fixed by inverting `rotSign` in the three places that apply throw to the geometry (ghost ball compensation, thrown travel line, and red cone offset).
+
+### Speed-independence at small cut angles is stun-specific
+
+TP A-14 §6.2 states throw is "nearly speed-independent at small cut angles" — this applies to stun shots (ω_x = 0) where the kinematics limit (1/7) dominates. For natural roll, the vertical sliding component (R·ω_x·cos(φ)) significantly changes v_rel, so friction varies with speed even at small angles. The test suite was updated to test speed-independence with stun, not natural roll.
+
+### CIT compensation model: percentage of throw, not fixed angular error
+
+The initial CIT slider treated compensation error as a fixed angular Gaussian (in degrees), combined in quadrature with execution error. This was wrong in two ways: (1) a player's compensation accuracy is better described as a percentage of the throw angle (bigger throw → proportionally bigger error), and (2) the two error sources live in different spaces (execution error in Δφ, CIT error in Δθ) and can't simply be combined in Δφ space.
+
+The redesigned slider goes from 0% to 30% and represents the 95% CI of compensation accuracy as a fraction of the full throw angle. The make probability is computed by integrating `makeProbabilityWithThrow` over the CIT error distribution using 5-point Gauss-Hermite quadrature, which correctly handles the nonlinear Δφ → Δθ mapping. For the error cone visualization, both error contributions are mapped to Δθ space and combined in quadrature there.

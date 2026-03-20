@@ -32,3 +32,18 @@ Separately, I've had Claude translate these into markdown specifications corner_
 
 I'd like the target area's size, position and orientation to update as the user drags the object ball around.  
 
+# V3: Collision induced throw
+
+For this version I'd like to include the impact of collision induced throw (CIT). There is a markdown translation of TP_A-14 in object_ball_throw_spec.md.  For simplicity we'll only account for the natural roll case.
+
+## Shot speed
+
+Shot speed has a large impact of CIT.  Let's introduce a toggle for speed, slow, medium, fast using the numbers from the report.
+
+## Player accuracy
+
+I'm not 100% sure how to handle the question of player accuracy when estimating the effect of CIT, but here is my best shot.  First we need a toggle that controls whether the aim point is adjusted for CIT.  When off, the aim point is as though CIT doesn't exist, and when on it perfectly compensates for CIT.  This lets the user explore the impact of CIT on different shots.
+
+Next we need a new slider, which is the shooter's accuracy in adjusting for CIT, in degrees, just like the first slider.  As with the first slider, we assume a Guassian error with zero mean, and the slider's value gives a 95% coverage interval.  This, of course, is generous.  Players probably systematically undercompensate for CIT.
+
+I'm not certain if the error cones remain the same -- that is a single cone from CB to OB and from OB to pocket, or if the error from stroke and CIT should be shown visually.
