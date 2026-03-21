@@ -38,6 +38,10 @@ npm run coverage # test with coverage report
 
 Math functions are split across `pool.js`, `pocket_geometry.js`, and `throw.js`, each with a corresponding test file.
 
+## Credits
+
+The underlying math is from the billiards physics research of [Dr. Dave Alciatore](https://www.engr.colostate.edu/~dga/bio/publications/#Research) (Colorado State University).
+
 ## Possible future extensions
 
 - Side pocket support

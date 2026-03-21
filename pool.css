@@ -13,6 +13,16 @@ body {
   min-height: 100vh;
 }
 
+#credits {
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+#credits a {
+  color: #aaa;
+}
+
 h1 {
   margin: 0 0 16px 0;
   font-size: 1.3rem;
