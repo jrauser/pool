@@ -15,6 +15,14 @@ export const CORNER_POCKET_DEFAULTS = {
   L: 100,             // rail length nose-to-nose (9-foot table)
 };
 
+export const SIDE_POCKET_DEFAULTS = {
+  R: 1.125,           // ball radius
+  p: 5.0,             // pocket mouth width (our table, BCA 4⅞"–5⅝")
+  alpha: 14 * DEG,    // wall angle
+  Rhole: 3.0,         // pocket hole radius
+  b: 0.1875,          // shelf depth to hole center
+};
+
 // ─── Root Finding ────────────────────────────────────────────────────────────
 
 const ROOT_TOL = 1e-10;
@@ -367,6 +375,71 @@ export function createCornerPocketCalculator(params = CORNER_POCKET_DEFAULTS) {
   return function cornerTargetSize(theta) {
     const sL = sLeft(theta);
     const sR = sLeft(-theta); // §9.2: s_right(θ) = s_left(−θ)
+    const s = sL + sR;
+    const offset = (sR - sL) / 2;
+    return { s, offset, sLeft: sL, sRight: sR };
+  };
+}
+
+// ─── Side Pocket (TP 3.5) ─────────────────────────────────────────────────────
+
+/**
+ * Compute critical angles for the side pocket model (TP 3.5 §4).
+ *
+ * θ_max: maximum angle where point deflection is possible (β_l = 90°).
+ * θ_critical: transition between point deflection and wall deflection.
+ * θ_min = −θ_max (by symmetry).
+ */
+export function computeSideCriticalAngles(params) {
+  // θ_max: solve polyBeta(params, 90°, θ) = 0 for θ (§4.1)
+  const thetaMax = findRoot(
+    theta => polyBeta(params, Math.PI / 2, theta),
+    60 * DEG,
+    30 * DEG,
+    85 * DEG
+  );
+
+  // θ_critical: where β_l + α − 90° = θ (§4.2)
+  // Equivalently, solve polyBetaIn at the θ where θ = β − 90° + α.
+  // Use iteration: guess θ, solve for β via polyBetaIn, check θ = β + α − 90°.
+  const thetaCritical = findRoot(
+    theta => {
+      const beta = findRoot(
+        b => polyBetaIn(params, b, theta),
+        45 * DEG, 0, Math.PI / 2
+      );
+      return theta - (beta + params.alpha - Math.PI / 2);
+    },
+    -50 * DEG,
+    -80 * DEG,
+    0
+  );
+
+  return { thetaMax, thetaCritical, thetaMin: -thetaMax };
+}
+
+/**
+ * Create a side pocket target size calculator for the given parameters.
+ * Returns a function θ → { s, offset, sLeft, sRight }.
+ *
+ * The side pocket model (TP 3.5) uses only point deflection and wall
+ * deflection — no rail bounces or multi-wall rattles.
+ */
+export function createSidePocketCalculator(params = SIDE_POCKET_DEFAULTS) {
+  const merged = { ...SIDE_POCKET_DEFAULTS, ...params };
+  const { thetaMax, thetaCritical, thetaMin } = computeSideCriticalAngles(merged);
+
+  function sLeft(theta) {
+    if (theta >= thetaMax || theta <= thetaMin) return 0;
+    if (theta < thetaCritical) {
+      return Math.max(0, sLeftWall(merged, theta));
+    }
+    return Math.max(0, sLeftPointWall(merged, theta));
+  }
+
+  return function sideTargetSize(theta) {
+    const sL = sLeft(theta);
+    const sR = sLeft(-theta);
     const s = sL + sR;
     const offset = (sR - sL) / 2;
     return { s, offset, sLeft: sL, sRight: sR };

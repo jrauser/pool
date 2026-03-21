@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CORNER_POCKET_DEFAULTS,
+  SIDE_POCKET_DEFAULTS,
   findRoot,
   auxiliaryA,
   polyBeta,
@@ -23,6 +24,8 @@ import {
   sLeftRailMaxAngle,
   computeCriticalAngles,
   createCornerPocketCalculator,
+  computeSideCriticalAngles,
+  createSidePocketCalculator,
 } from './pocket_geometry.js';
 
 const DEG = Math.PI / 180;
@@ -244,5 +247,107 @@ describe('createCornerPocketCalculator', () => {
     // Center region should be lower than near-rail
     expect(s43).toBeGreaterThan(s0);
     expect(s43).toBeGreaterThan(s20);
+  });
+});
+
+// ─── Side Pocket ──────────────────────────────────────────────────────────────
+
+const sideParams = SIDE_POCKET_DEFAULTS;
+
+describe('computeSideCriticalAngles', () => {
+  const crits = computeSideCriticalAngles(sideParams);
+
+  it('θ_max is near 68° for default params', () => {
+    expect(crits.thetaMax / DEG).toBeGreaterThan(60);
+    expect(crits.thetaMax / DEG).toBeLessThan(75);
+  });
+
+  it('θ_min = −θ_max', () => {
+    expect(crits.thetaMin).toBeCloseTo(-crits.thetaMax, 10);
+  });
+
+  it('θ_critical is negative and between θ_min and 0', () => {
+    expect(crits.thetaCritical).toBeLessThan(0);
+    expect(crits.thetaCritical).toBeGreaterThan(crits.thetaMin);
+  });
+
+  it('θ_critical is near −50° for default params', () => {
+    expect(crits.thetaCritical / DEG).toBeGreaterThan(-60);
+    expect(crits.thetaCritical / DEG).toBeLessThan(-40);
+  });
+});
+
+describe('createSidePocketCalculator', () => {
+  const calc = createSidePocketCalculator(sideParams);
+
+  it('returns an object with s, offset, sLeft, sRight', () => {
+    const result = calc(0);
+    expect(result).toHaveProperty('s');
+    expect(result).toHaveProperty('offset');
+    expect(result).toHaveProperty('sLeft');
+    expect(result).toHaveProperty('sRight');
+  });
+
+  it('s(0°) ≈ 3.35" (perpendicular approach)', () => {
+    const result = calc(0);
+    expect(result.s).toBeGreaterThan(2.8);
+    expect(result.s).toBeLessThan(3.8);
+  });
+
+  it('s = 0 at ±θ_max', () => {
+    const crits = computeSideCriticalAngles(sideParams);
+    expect(calc(crits.thetaMax).s).toBeCloseTo(0, 1);
+    expect(calc(-crits.thetaMax).s).toBeCloseTo(0, 1);
+  });
+
+  it('s is non-negative across the valid range', () => {
+    for (let deg = -67; deg <= 67; deg += 2) {
+      const result = calc(deg * DEG);
+      expect(result.s).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('s = sLeft + sRight', () => {
+    for (let deg = -60; deg <= 60; deg += 5) {
+      const result = calc(deg * DEG);
+      expect(result.s).toBeCloseTo(result.sLeft + result.sRight, 10);
+    }
+  });
+
+  it('is symmetric: s(θ) ≈ s(−θ)', () => {
+    for (let deg = 1; deg <= 65; deg += 5) {
+      const pos = calc(deg * DEG);
+      const neg = calc(-deg * DEG);
+      expect(pos.s).toBeCloseTo(neg.s, 4);
+    }
+  });
+
+  it('offset is antisymmetric: offset(θ) ≈ −offset(−θ)', () => {
+    for (let deg = 1; deg <= 65; deg += 5) {
+      const pos = calc(deg * DEG);
+      const neg = calc(-deg * DEG);
+      expect(pos.offset).toBeCloseTo(-neg.offset, 4);
+    }
+  });
+
+  it('offset ≈ 0 at θ = 0', () => {
+    const result = calc(0);
+    expect(Math.abs(result.offset)).toBeLessThan(0.01);
+  });
+
+  it('s is roughly bell-shaped: peaks near 0° and falls at edges', () => {
+    const s0 = calc(0).s;
+    const s35 = calc(35 * DEG).s;
+    const s60 = calc(60 * DEG).s;
+    expect(s0).toBeGreaterThan(s35);
+    expect(s35).toBeGreaterThan(s60);
+  });
+
+  it('s is continuous at θ_critical (piecewise transition)', () => {
+    const crits = computeSideCriticalAngles(sideParams);
+    const eps = 0.01 * DEG;
+    const above = calc(crits.thetaCritical + eps).s;
+    const below = calc(crits.thetaCritical - eps).s;
+    expect(above).toBeCloseTo(below, 1);
   });
 });

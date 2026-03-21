@@ -1,6 +1,6 @@
 # Pool Shot Margin Visualizer
 
-An interactive web page that builds visual intuition for the mathematics of pool shot execution error. Based on analyses in *reference/TP_3-4.pdf*, *reference/TP_3-6.pdf*, and *reference/TP_A-14.pdf*.
+An interactive web page that builds visual intuition for the mathematics of pool shot execution error. Based on analyses in *reference/TP_3-4.pdf*, *reference/TP_3-5.pdf*, *reference/TP_3-6.pdf*, and *reference/TP_A-14.pdf*.
 
 ## What it does
 
@@ -10,6 +10,10 @@ The page shows a 9-foot pool table with a draggable cue ball and object ball. A 
 - The **red cone** (±Δθ) shows the resulting spread in the object ball's direction
 - The **yellow target line** shows the effective pocket opening for the current approach angle
 - The **make probability** updates live
+
+### Pocket selection
+
+A toggle switches between the **upper-right corner pocket** and the **top-center side pocket**. Each pocket type uses its own target-size model (TP 3.6 for corners, TP 3.5 for sides) with different geometry: mouth width, facing angles, and pocketing mechanisms. The side pocket model accounts for point deflection and wall deflection; the corner pocket model additionally handles rail deflection and multi-wall rattles.
 
 ### Collision-induced throw (CIT)
 
@@ -44,7 +48,7 @@ The underlying math is from the billiards physics research of [Dr. Dave Alciator
 
 ## Possible future extensions
 
-- Side pocket support
+- Render all six pockets and diamond markers
 - Sidespin / spin-induced throw
 - Stun and draw spin states
 - Squirt and swerve

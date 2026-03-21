@@ -47,3 +47,12 @@ I'm not 100% sure how to handle the question of player accuracy when estimating 
 Next we need a new slider, which is the shooter's accuracy in adjusting for CIT, in degrees, just like the first slider.  As with the first slider, we assume a Guassian error with zero mean, and the slider's value gives a 95% coverage interval.  This, of course, is generous.  Players probably systematically undercompensate for CIT.
 
 I'm not certain if the error cones remain the same -- that is a single cone from CB to OB and from OB to pocket, or if the error from stroke and CIT should be shown visually.
+
+# V3.1: Side Pocket
+
+I'd like to add a side pocket to the table and leverage the side pocket sizing spec in `reference/side_pocket_target_size_spec.md`.  Again referring to the [BCA spec](https://www.classicbilliards.net/cushions-supplies/bca-pocket-specs.html) a side pocket mouth can be between 4 7/8" and 5 5/8".  Let's say ours are 5".  The facing angles are 103 degrees.
+
+To begin let's the render one side pocket on the top of the table.  Add a toggle that aims for that pocket vs the corner, and does all the attendant math to compute the target area.
+
+Let me test, and then as a final step we can render all the pockets on the table by means of rotation/reflection.  Id also like to add diamonds to the table.  A standard pool table has three diamond between any pair of pockets.  They are placed 1/4, 1/2 and 3/4 of the distance between the pockets.
+

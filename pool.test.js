@@ -7,6 +7,7 @@ import {
   deltaTheta,
   cutAngle,
   approachAngle,
+  approachAngleSide,
   pocketTolerance,
   makeProbability,
   normalCDF,
@@ -17,6 +18,7 @@ import {
   conePoints,
   BALL_RADIUS,
   POCKET_POS,
+  SIDE_POCKET_POS,
   SVG_HEIGHT,
   SVG_BORDER,
   SVG_SCALE,
@@ -234,6 +236,38 @@ describe('approachAngle', () => {
   });
 });
 
+// ─── approachAngleSide ───────────────────────────────────────────────────────
+
+describe('approachAngleSide', () => {
+  it('θ = 0 when approaching straight up (perpendicular to rail)', () => {
+    // Object ball directly below the side pocket
+    const theta = approachAngleSide([50, 20], [50, 50]);
+    expect(theta).toBeCloseTo(0, 8);
+  });
+
+  it('θ < 0 when approaching from the left (ball left of pocket)', () => {
+    // OB at (30,40), pocket at (50,50): direction is right-and-up,
+    // angle < 90° so θ = angle − 90° < 0
+    const theta = approachAngleSide([30, 40], [50, 50]);
+    expect(theta).toBeLessThan(0);
+  });
+
+  it('θ > 0 when approaching from the right (ball right of pocket)', () => {
+    // OB at (70,40), pocket at (50,50): direction is left-and-up,
+    // angle > 90° so θ = angle − 90° > 0
+    const theta = approachAngleSide([70, 40], [50, 50]);
+    expect(theta).toBeGreaterThan(0);
+  });
+
+  it('magnitude stays within ~90°', () => {
+    const positions = [[10, 25], [90, 25], [50, 5], [30, 45]];
+    for (const pos of positions) {
+      const theta = approachAngleSide(pos, [50, 50]);
+      expect(Math.abs(theta)).toBeLessThan(Math.PI / 2);
+    }
+  });
+});
+
 // ─── pocketTolerance ─────────────────────────────────────────────────────────
 
 describe('pocketTolerance', () => {
@@ -272,6 +306,19 @@ describe('pocketTolerance', () => {
 
   it('alpha is positive', () => {
     expect(pocketTolerance([50, 25], [100, 50]).alpha).toBeGreaterThan(0);
+  });
+
+  it('works with side pocket type', () => {
+    const result = pocketTolerance([50, 25], SIDE_POCKET_POS, 'side');
+    expect(result.alpha).toBeGreaterThan(0);
+    expect(result.targetSize).toBeGreaterThan(0);
+  });
+
+  it('side pocket has larger target size than corner (perpendicular approach)', () => {
+    // Side pocket mouth is wider (5" vs 4.5") and has a different model
+    const side = pocketTolerance([50, 25], SIDE_POCKET_POS, 'side');
+    const corner = pocketTolerance([70, 20], POCKET_POS, 'corner');
+    expect(side.targetSize).toBeGreaterThan(corner.targetSize);
   });
 });
 

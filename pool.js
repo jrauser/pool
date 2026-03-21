@@ -1,7 +1,7 @@
 // pool.js — Pool Shot Margin Visualizer
 // All angles are in radians internally; degrees only for display.
 
-import { createCornerPocketCalculator } from './pocket_geometry.js';
+import { createCornerPocketCalculator, createSidePocketCalculator } from './pocket_geometry.js';
 import { throwAngleNaturalRoll, SPEEDS } from './throw.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -23,6 +23,17 @@ export const POCKET_POS = [
   (POCKET_RAIL_END_TOP[0] + POCKET_RAIL_END_RIGHT[0]) / 2,
   (POCKET_RAIL_END_TOP[1] + POCKET_RAIL_END_RIGHT[1]) / 2,
 ];
+
+// ─── Side pocket geometry ────────────────────────────────────────────────────
+
+export const SIDE_POCKET_MOUTH_WIDTH = 5.0;  // inches, BCA standard
+export const SIDE_POCKET_FACING_ANGLE = 103 * Math.PI / 180;  // BCA spec
+// Position: center of top rail
+export const SIDE_POCKET_POS = [TABLE_WIDTH / 2, TABLE_HEIGHT];
+// Rail ends: half the mouth width in each direction along the top rail
+const SIDE_POCKET_HALF_MOUTH = SIDE_POCKET_MOUTH_WIDTH / 2;
+export const SIDE_POCKET_RAIL_END_LEFT  = [TABLE_WIDTH / 2 - SIDE_POCKET_HALF_MOUTH, TABLE_HEIGHT];
+export const SIDE_POCKET_RAIL_END_RIGHT = [TABLE_WIDTH / 2 + SIDE_POCKET_HALF_MOUTH, TABLE_HEIGHT];
 
 // Default ball positions (inches, origin lower-left)
 export const DEFAULT_OBJECT_BALL = [70, 25];
@@ -129,11 +140,36 @@ export function approachAngle(objPos, pocketPos) {
   return angle - Math.PI / 4;
 }
 
+/**
+ * Compute the approach angle θ for a side pocket on the top rail.
+ * θ is measured from the perpendicular to the rail (straight into the pocket).
+ * θ = 0 means the ball approaches perpendicular to the rail.
+ * θ > 0 means approach from the left.
+ * θ < 0 means approach from the right.
+ *
+ * @param {[number,number]} objPos    - [x, y] object ball (inches)
+ * @param {[number,number]} pocketPos - [x, y] pocket (inches)
+ * @returns {number} - θ in radians
+ */
+export function approachAngleSide(objPos, pocketPos) {
+  const dx = pocketPos[0] - objPos[0];
+  const dy = pocketPos[1] - objPos[1];
+  const angle = Math.atan2(dy, dx);
+  // Perpendicular to top rail (straight up) is π/2
+  return angle - Math.PI / 2;
+}
+
 // Corner pocket target size calculator (precomputed critical angles)
 const cornerCalc = createCornerPocketCalculator({
   R: BALL_RADIUS,
   p: POCKET_MOUTH_WIDTH,
   L: TABLE_WIDTH,
+});
+
+// Side pocket target size calculator (precomputed critical angles)
+const sideCalc = createSidePocketCalculator({
+  R: BALL_RADIUS,
+  p: SIDE_POCKET_MOUTH_WIDTH,
 });
 
 /**
@@ -142,12 +178,17 @@ const cornerCalc = createCornerPocketCalculator({
  *
  * @param {[number,number]} objPos    - [x, y] object ball (inches)
  * @param {[number,number]} pocketPos - [x, y] pocket (inches)
+ * @param {'corner'|'side'} pocketType - pocket type (default: 'corner')
  * @returns {{ alpha: number, targetSize: number, offset: number }}
  */
-export function pocketTolerance(objPos, pocketPos) {
+export function pocketTolerance(objPos, pocketPos, pocketType = 'corner') {
   const dop = Math.hypot(pocketPos[0] - objPos[0], pocketPos[1] - objPos[1]);
-  const theta = approachAngle(objPos, pocketPos);
-  const { s, offset } = cornerCalc(theta);
+  const theta = pocketType === 'corner'
+    ? approachAngle(objPos, pocketPos)
+    : approachAngleSide(objPos, pocketPos);
+  const { s, offset } = pocketType === 'corner'
+    ? cornerCalc(theta)
+    : sideCalc(theta);
   const alpha = Math.atan((s / 2) / dop);
   return { alpha, targetSize: s, offset };
 }
@@ -487,7 +528,7 @@ function initApp() {
   svg.appendChild(felt);
 
   // Pocket geometry in SVG coordinates (pocket is fixed — computed once)
-  const [pocketSvgX, pocketSvgY] = tableToSVG(POCKET_POS[0], POCKET_POS[1]);
+  let [pocketSvgX, pocketSvgY] = tableToSVG(POCKET_POS[0], POCKET_POS[1]);
   const [aSvgX, aSvgY]      = tableToSVG(POCKET_RAIL_END_TOP[0],   POCKET_RAIL_END_TOP[1]);
   const [bSvgX, bSvgY]      = tableToSVG(POCKET_RAIL_END_RIGHT[0], POCKET_RAIL_END_RIGHT[1]);
   const [cornerSvgX, cornerSvgY] = tableToSVG(TABLE_CORNER[0], TABLE_CORNER[1]);
@@ -523,6 +564,47 @@ function initApp() {
   facingB.setAttribute('stroke', '#5a3a1a');
   facingB.setAttribute('stroke-width', 2);
   svg.appendChild(facingB);
+
+  // ── Side pocket (top rail) ──────────────────────────────────────────────────
+
+  const [spLeftX, spLeftY] = tableToSVG(SIDE_POCKET_RAIL_END_LEFT[0], SIDE_POCKET_RAIL_END_LEFT[1]);
+  const [spRightX, spRightY] = tableToSVG(SIDE_POCKET_RAIL_END_RIGHT[0], SIDE_POCKET_RAIL_END_RIGHT[1]);
+  // The pocket extends into the rail (upward in table coords = lower SVG y)
+  const spDepth = SIDE_POCKET_MOUTH_WIDTH * 0.5 * SVG_SCALE;
+
+  const sidePocketPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  sidePocketPoly.setAttribute('points',
+    `${spLeftX},${spLeftY} ${spLeftX},${spLeftY - spDepth} ${spRightX},${spRightY - spDepth} ${spRightX},${spRightY}`);
+  sidePocketPoly.setAttribute('fill', '#111');
+  svg.appendChild(sidePocketPoly);
+
+  // Side pocket facings: BCA 103° interior angle from the rail.
+  // The rail runs horizontally. The facing angle from the rail is (180° − 103°) = 77°.
+  // Left facing points inward (right and down into pocket): direction (cos77°, −sin77°) in table coords.
+  // Right facing points inward (left and down into pocket): direction (−cos77°, −sin77°) in table coords.
+  // In SVG coords (y flipped): y-component sign flips.
+  const facingAngle = Math.PI - SIDE_POCKET_FACING_ANGLE; // 77°
+  const sfCos = Math.cos(facingAngle);
+  const sfSin = Math.sin(facingAngle);
+  const sideFacingLen = SIDE_POCKET_HALF_MOUTH * SVG_SCALE * 0.6;
+
+  const sideFacingL = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  sideFacingL.setAttribute('x1', spLeftX);
+  sideFacingL.setAttribute('y1', spLeftY);
+  sideFacingL.setAttribute('x2', spLeftX + sfCos * sideFacingLen);
+  sideFacingL.setAttribute('y2', spLeftY - sfSin * sideFacingLen);
+  sideFacingL.setAttribute('stroke', '#5a3a1a');
+  sideFacingL.setAttribute('stroke-width', 2);
+  svg.appendChild(sideFacingL);
+
+  const sideFacingR = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  sideFacingR.setAttribute('x1', spRightX);
+  sideFacingR.setAttribute('y1', spRightY);
+  sideFacingR.setAttribute('x2', spRightX - sfCos * sideFacingLen);
+  sideFacingR.setAttribute('y2', spRightY - sfSin * sideFacingLen);
+  sideFacingR.setAttribute('stroke', '#5a3a1a');
+  sideFacingR.setAttribute('stroke-width', 2);
+  svg.appendChild(sideFacingR);
 
   // Effective target line: updated dynamically by updateGeometry()
   const targetLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -640,6 +722,28 @@ function initApp() {
   const displayCitError = document.getElementById('display-cit-error');
 
   let selectedSpeed = 'medium';
+  let selectedPocket = 'corner';
+
+  // Pocket toggle
+  const pocketToggle = document.getElementById('pocket-toggle');
+  pocketToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-pocket]');
+    if (!btn) return;
+    pocketToggle.querySelector('.active').classList.remove('active');
+    btn.classList.add('active');
+    selectedPocket = btn.dataset.pocket;
+    // Update pocket position
+    if (selectedPocket === 'corner') {
+      pocket[0] = POCKET_POS[0];
+      pocket[1] = POCKET_POS[1];
+    } else {
+      pocket[0] = SIDE_POCKET_POS[0];
+      pocket[1] = SIDE_POCKET_POS[1];
+    }
+    // Update SVG pocket reference point
+    [pocketSvgX, pocketSvgY] = tableToSVG(pocket[0], pocket[1]);
+    redraw();
+  });
 
   // Speed toggle button handler
   speedToggle.addEventListener('click', (e) => {
@@ -758,8 +862,11 @@ function initApp() {
     }
 
     // Dynamic target line: aligned with pocket mouth, shifted by offset.
-    const perpX = -1 / Math.SQRT2;
-    const perpY = 1 / Math.SQRT2; // table coords (y up)
+    // Perpendicular to the pocket centerline (direction along the mouth).
+    // Corner: mouth is at 45°, so perp is [-1/√2, 1/√2].
+    // Side (top): mouth is along the rail (horizontal), so perp is [1, 0].
+    const perpX = selectedPocket === 'corner' ? -1 / Math.SQRT2 : 1;
+    const perpY = selectedPocket === 'corner' ? 1 / Math.SQRT2 : 0;
     const halfTarget = targetSize / 2;
     const centerX = pocket[0] + targetOffset * perpX;
     const centerY = pocket[1] + targetOffset * perpY;
@@ -873,7 +980,7 @@ function initApp() {
   function redraw() {
     const phi = cutAngle(cuePos, objPos, pocket);
     const d = Math.hypot(objPos[0] - cuePos[0], objPos[1] - cuePos[1]);
-    const { alpha, targetSize, offset } = pocketTolerance(objPos, pocket);
+    const { alpha, targetSize, offset } = pocketTolerance(objPos, pocket, selectedPocket);
     const citAdjust = citAdjustToggle.checked;
 
     // Compute throw angle for current speed and cut angle
