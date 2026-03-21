@@ -1033,6 +1033,25 @@ function initApp() {
 
   let dragging = null; // 'cue' | 'obj' | null
 
+  function clientToTablePos(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    return clampToBounds(svgToTable(clientX - rect.left, clientY - rect.top));
+  }
+
+  function applyDrag(pos) {
+    if (dragging === 'cue') {
+      pos = resolveOverlap(pos, objPos);
+      cuePos[0] = pos[0];
+      cuePos[1] = pos[1];
+    } else {
+      pos = resolveOverlap(pos, cuePos);
+      objPos[0] = pos[0];
+      objPos[1] = pos[1];
+    }
+    redraw();
+  }
+
+  // Mouse drag
   cueBallEl.addEventListener('mousedown', (e) => {
     dragging = 'cue';
     svg.classList.add('dragging');
@@ -1047,18 +1066,7 @@ function initApp() {
 
   svg.addEventListener('mousemove', (e) => {
     if (!dragging) return;
-    const rect = svg.getBoundingClientRect();
-    let pos = clampToBounds(svgToTable(e.clientX - rect.left, e.clientY - rect.top));
-    if (dragging === 'cue') {
-      pos = resolveOverlap(pos, objPos);
-      cuePos[0] = pos[0];
-      cuePos[1] = pos[1];
-    } else {
-      pos = resolveOverlap(pos, cuePos);
-      objPos[0] = pos[0];
-      objPos[1] = pos[1];
-    }
-    redraw();
+    applyDrag(clientToTablePos(e.clientX, e.clientY));
   });
 
   function stopDrag() {
@@ -1068,6 +1076,29 @@ function initApp() {
 
   svg.addEventListener('mouseup', stopDrag);
   svg.addEventListener('mouseleave', stopDrag);
+
+  // Touch drag
+  cueBallEl.addEventListener('touchstart', (e) => {
+    dragging = 'cue';
+    svg.classList.add('dragging');
+    e.preventDefault();
+  }, { passive: false });
+
+  objBallEl.addEventListener('touchstart', (e) => {
+    dragging = 'obj';
+    svg.classList.add('dragging');
+    e.preventDefault();
+  }, { passive: false });
+
+  svg.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    applyDrag(clientToTablePos(touch.clientX, touch.clientY));
+  }, { passive: false });
+
+  svg.addEventListener('touchend', stopDrag);
+  svg.addEventListener('touchcancel', stopDrag);
 
   // ── Info popups ────────────────────────────────────────────────────────────
 
