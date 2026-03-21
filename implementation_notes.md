@@ -159,3 +159,13 @@ TP A-14 §6.2 states throw is "nearly speed-independent at small cut angles" —
 The initial CIT slider treated compensation error as a fixed angular Gaussian (in degrees), combined in quadrature with execution error. This was wrong in two ways: (1) a player's compensation accuracy is better described as a percentage of the throw angle (bigger throw → proportionally bigger error), and (2) the two error sources live in different spaces (execution error in Δφ, CIT error in Δθ) and can't simply be combined in Δφ space.
 
 The redesigned slider goes from 0% to 30% and represents the 95% CI of compensation accuracy as a fraction of the full throw angle. The make probability is computed by integrating `makeProbabilityWithThrow` over the CIT error distribution using 5-point Gauss-Hermite quadrature, which correctly handles the nonlinear Δφ → Δθ mapping. For the error cone visualization, both error contributions are mapped to Δθ space and combined in quadrature there.
+
+---
+
+## Asymmetric OB error cone
+
+The OB error cone was originally symmetric: `deltaTheta(d, phi, +Δφ)` was used as the half-angle for both sides. This is incorrect because the Δφ→Δθ mapping is nonlinear — the magnitude of Δθ at +Δφ differs from the magnitude at −Δφ. For thin cuts with large execution error, this made the cone absurdly wide: the "near miss" side (where Δθ blows up as the arcsin argument approaches 1) was applied to both edges.
+
+The fix computes both cone edges independently: `deltaTheta(d, phi, +Δφ)` for one edge and `deltaTheta(d, phi, -Δφ)` for the other. When either Δφ exceeds the domain boundary (the cue ball misses the object ball entirely), the edge is capped at the domain-boundary Δθ value via `findDeltaPhiDomainMax`/`findDeltaPhiDomainMin`. The `conePoints` function now accepts an optional `halfAnglePlus` parameter for the asymmetric case, defaulting to the existing symmetric behavior.
+
+The formula's Δθ sign convention maps to `dirAngle + Δθ` in SVG coordinates: `halfAnglePlus = dtPlus` (fuller side, from +Δφ) and `halfAngleMinus = |dtMinus|` (thinner side, from −Δφ). An initial implementation had these swapped, which caused the wider edge of the cone to extend past the 90° cut boundary at extreme cuts — verified by computing the geometric OB direction at impact and comparing to the formula's prediction.

@@ -124,6 +124,22 @@ describe('deltaTheta', () => {
     expect(dt).not.toBeNull();
     expect(isFinite(dt)).toBe(true);
   });
+
+  it('+Δφ and -Δφ produce asymmetric Δθ for non-trivial cuts', () => {
+    // The Δφ→Δθ mapping is nonlinear, so |Δθ(+Δφ)| ≠ |Δθ(-Δφ)| in general.
+    const d = 30;
+    const phi = 0.6; // ~34° cut
+    const deltaPhi = 0.02; // ~1.1°
+    const dtPlus = deltaTheta(d, phi, deltaPhi);
+    const dtMinus = deltaTheta(d, phi, -deltaPhi);
+    expect(dtPlus).not.toBeNull();
+    expect(dtMinus).not.toBeNull();
+    // Signs should be opposite (deviations in opposite directions)
+    expect(dtPlus).toBeGreaterThan(0);
+    expect(dtMinus).toBeLessThan(0);
+    // Magnitudes should differ (asymmetric)
+    expect(Math.abs(dtPlus)).not.toBeCloseTo(Math.abs(dtMinus), 1);
+  });
 });
 
 // ─── cutAngle ────────────────────────────────────────────────────────────────
@@ -428,6 +444,24 @@ describe('conePoints', () => {
     const result = conePoints(10, 20, Math.PI / 4, 0, 60);
     const [, p1, p2] = result.trim().split(' ');
     expect(p1).toBe(p2);
+  });
+
+  it('asymmetric half-angles produce different edge distances from center', () => {
+    // Direction = 0 (rightward), halfAngleMinus = 0.1, halfAnglePlus = 0.4
+    const result = conePoints(0, 0, 0, 0.1, 100, 0.4);
+    const [, p1, p2] = result.trim().split(' ').map(s => s.split(',').map(Number));
+    // Both side points at distance 100 from origin
+    expect(Math.hypot(p1[0], p1[1])).toBeCloseTo(100, 5);
+    expect(Math.hypot(p2[0], p2[1])).toBeCloseTo(100, 5);
+    // p1 is at angle -0.1 (small deviation), p2 at angle +0.4 (large deviation)
+    // So |p1[1]| < |p2[1]| (the "plus" side swings further from center)
+    expect(Math.abs(p1[1])).toBeLessThan(Math.abs(p2[1]));
+  });
+
+  it('asymmetric cone defaults to symmetric when halfAnglePlus is omitted', () => {
+    const symmetric = conePoints(0, 0, 0, 0.3, 100);
+    const explicit = conePoints(0, 0, 0, 0.3, 100, 0.3);
+    expect(symmetric).toBe(explicit);
   });
 });
 

@@ -437,13 +437,14 @@ export function svgToTable(svgX, svgY) {
  * @param {number} originX  - SVG x of the cone apex (pixels)
  * @param {number} originY  - SVG y of the cone apex (pixels)
  * @param {number} dirAngle - Central direction angle (radians, SVG coords)
- * @param {number} halfAngle - Half-angle of the cone (radians)
+ * @param {number} halfAngle - Half-angle on the "minus" side of the cone (radians)
  * @param {number} length   - Length of the cone sides (pixels)
+ * @param {number} [halfAnglePlus] - Half-angle on the "plus" side (radians); defaults to halfAngle (symmetric)
  * @returns {string} - SVG polygon points attribute value
  */
-export function conePoints(originX, originY, dirAngle, halfAngle, length) {
+export function conePoints(originX, originY, dirAngle, halfAngle, length, halfAnglePlus = halfAngle) {
   const a1 = dirAngle - halfAngle;
-  const a2 = dirAngle + halfAngle;
+  const a2 = dirAngle + halfAnglePlus;
   const x1 = originX + length * Math.cos(a1);
   const y1 = originY + length * Math.sin(a1);
   const x2 = originX + length * Math.cos(a2);
@@ -789,19 +790,33 @@ function initApp() {
       prob = makeProbabilityWithThrow(d, phi, alpha, sigma, tThrow);
     }
 
-    // Cone half-angle: combine execution error and CIT error in Δθ space.
-    let deltaT;
+    // Asymmetric OB cone: compute Δθ for both edges independently.
+    // +Δφ (thin side) and -Δφ (full side) produce different Δθ values
+    // because the Δφ→Δθ mapping is nonlinear.
+    let dtPlus = deltaTheta(d, phi, deltaPhiRad);
+    if (dtPlus === null) {
+      // CB misses OB at this Δφ — cap at domain boundary
+      const domMax = findDeltaPhiDomainMax(d, phi);
+      dtPlus = deltaTheta(d, phi, domMax) ?? 0;
+    }
+    let dtMinus = deltaTheta(d, phi, -deltaPhiRad);
+    if (dtMinus === null) {
+      const domMin = findDeltaPhiDomainMin(d, phi);
+      dtMinus = deltaTheta(d, phi, domMin) ?? 0;
+    }
+
+    // halfMinus = edge at (dirAngle - halfMinus) = thinner side (from -Δφ)
+    // halfPlus  = edge at (dirAngle + halfPlus)  = fuller side (from +Δφ)
+    // The formula's Δθ sign convention maps to dirAngle + Δθ in SVG coords,
+    // so: halfPlus = dtPlus, halfMinus = |dtMinus|.
+    let coneHalfMinus, coneHalfPlus;
     if (citAdjust) {
-      // Execution error contribution in Δθ space
-      const dtExec = deltaTheta(d, phi, deltaPhiRad);
-      const dtExecVal = dtExec !== null ? dtExec : alpha;
-      // CIT error contribution directly in Δθ space (95% value)
       const dtCit95 = (citPercent / 100) * tThrow;
-      // Combine in quadrature — both are now in the same space
-      deltaT = Math.hypot(dtExecVal, dtCit95);
+      coneHalfMinus = Math.hypot(Math.abs(dtMinus), dtCit95);
+      coneHalfPlus = Math.hypot(dtPlus, dtCit95);
     } else {
-      const dtRaw = deltaTheta(d, phi, deltaPhiRad);
-      deltaT = dtRaw !== null ? dtRaw : alpha;
+      coneHalfMinus = Math.abs(dtMinus);
+      coneHalfPlus = dtPlus;
     }
 
     displayDeltaPhi.textContent = deltaPhiDeg.toFixed(2) + '\u00b0';
@@ -831,9 +846,10 @@ function initApp() {
     const objConeLen = Math.hypot(opSvgDx, opSvgDy) * 1.5;
     const opDirAngle = Math.atan2(opSvgDy, opSvgDx);
 
+    // Determine cone center direction
+    let coneDirAngle = opDirAngle;
     if (!citAdjust && tThrow > 0) {
       // Cone centered on thrown direction
-      // Determine the rotation sign (same logic as updateGeometry)
       const opx = pocket[0] - objPos[0];
       const opy = pocket[1] - objPos[1];
       const opLen2 = Math.hypot(opx, opy);
@@ -844,19 +860,13 @@ function initApp() {
       const cross = opuX * ocy - opuY * ocx;
       const rotSign = cross >= 0 ? -1 : 1;
       // In SVG coords, y is flipped, so the rotation sign flips too
-      const thrownDirAngle = opDirAngle - rotSign * tThrow;
-      if (Math.abs(deltaT) > 0) {
-        objCone.setAttribute('points', conePoints(objSvgX, objSvgY, thrownDirAngle, Math.abs(deltaT), objConeLen));
-      } else {
-        objCone.setAttribute('points', '');
-      }
+      coneDirAngle = opDirAngle - rotSign * tThrow;
+    }
+
+    if (coneHalfMinus > 0 || coneHalfPlus > 0) {
+      objCone.setAttribute('points', conePoints(objSvgX, objSvgY, coneDirAngle, coneHalfMinus, objConeLen, coneHalfPlus));
     } else {
-      // Cone centered on pocket direction
-      if (Math.abs(deltaT) > 0) {
-        objCone.setAttribute('points', conePoints(objSvgX, objSvgY, opDirAngle, Math.abs(deltaT), objConeLen));
-      } else {
-        objCone.setAttribute('points', '');
-      }
+      objCone.setAttribute('points', '');
     }
   }
 

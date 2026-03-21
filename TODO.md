@@ -1,10 +1,16 @@
 # TODO
 
-- **A bug**: If you set up a thin cut and move the execution error slider all the way to the maximum, the error cone for the object ball path includes a large region where the implied cut is over 90 degrees.  I'm not exactly sure what's happening with the geometry, but what's being included is a region where the cue ball just misses the object ball.  It makes me worry though that the point of impact between the cue ball and object ball isn't being modeled properly.  In other words, maybe the error on the other side (hitting the OB too full), isn't being computed correctly?
-
 - **A question**: Practically, when I set up a long thin cut, say with the OB half a ball off the rail at the third diamond, and the CB in the center of the table, I miss much more often on the too-full side -- the OB hits the long rail and rebounds outside of the mouth of the pocket.  I think this suggests that I systematically undercompensate for CIT.  But maybe my execution error on thin cuts is biased toward the too full side?  I guess that's indistinguishable from a systematic undercompensation for CIT.  It's interesting.
 
 # Done
+
+- **Symmetric OB error cone bug**: The OB error cone used `deltaTheta(d, phi, +Δφ)`
+  as a symmetric half-angle for both sides. But the Δφ→Δθ mapping is nonlinear —
+  `|Δθ(+Δφ)| ≠ |Δθ(-Δφ)|` — so one side of the cone was wildly overstated.
+  On thin cuts with max error, the wrong-side Δθ reached 80°+, producing an
+  absurdly wide cone. Fixed by computing both edges independently and drawing
+  an asymmetric cone. Domain boundary hits (CB misses OB) are capped at the
+  boundary Δθ value.
 
 - **Angle-dependent pocket target**: The effective target area should vary based on the angle
   at which the object ball approaches the pocket. A ball traveling toward the pocket along the
