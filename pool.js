@@ -912,18 +912,39 @@ function initApp() {
       dtMinus = deltaTheta(d, phi, domMin) ?? 0;
     }
 
-    // halfMinus = edge at (dirAngle - halfMinus) = thinner side (from -Δφ)
-    // halfPlus  = edge at (dirAngle + halfPlus)  = fuller side (from +Δφ)
-    // The formula's Δθ sign convention maps to dirAngle + Δθ in SVG coords,
-    // so: halfPlus = dtPlus, halfMinus = |dtMinus|.
+    // The formula's Δθ sign is 1D. In 2D, the mapping from Δθ sign to SVG
+    // angle direction depends on which side of the OB→pocket line the CB is on.
+    // When cross(OB→pocket, OB→CB) >= 0: +Δθ → dirAngle + Δθ in SVG.
+    // When cross < 0: +Δθ → dirAngle − Δθ in SVG (edges swap).
+    const opx2 = pocket[0] - objPos[0];
+    const opy2 = pocket[1] - objPos[1];
+    const ocx2 = cuePos[0] - objPos[0];
+    const ocy2 = cuePos[1] - objPos[1];
+    const crossCone = opx2 * ocy2 - opy2 * ocx2;
+
+    // Assign cone edges: halfMinus = edge at (dirAngle - halfMinus),
+    // halfPlus = edge at (dirAngle + halfPlus).
     let coneHalfMinus, coneHalfPlus;
+    const absDtMinus = Math.abs(dtMinus);
     if (citAdjust) {
       const dtCit95 = (citPercent / 100) * tThrow;
-      coneHalfMinus = Math.hypot(Math.abs(dtMinus), dtCit95);
-      coneHalfPlus = Math.hypot(dtPlus, dtCit95);
+      const dtPlusCombo = Math.hypot(dtPlus, dtCit95);
+      const dtMinusCombo = Math.hypot(absDtMinus, dtCit95);
+      if (crossCone >= 0) {
+        coneHalfMinus = dtMinusCombo;
+        coneHalfPlus = dtPlusCombo;
+      } else {
+        coneHalfMinus = dtPlusCombo;
+        coneHalfPlus = dtMinusCombo;
+      }
     } else {
-      coneHalfMinus = Math.abs(dtMinus);
-      coneHalfPlus = dtPlus;
+      if (crossCone >= 0) {
+        coneHalfMinus = absDtMinus;
+        coneHalfPlus = dtPlus;
+      } else {
+        coneHalfMinus = dtPlus;
+        coneHalfPlus = absDtMinus;
+      }
     }
 
     displayDeltaPhi.textContent = deltaPhiDeg.toFixed(2) + '\u00b0';
