@@ -505,6 +505,10 @@ function initApp() {
   // ── Build SVG ──────────────────────────────────────────────────────────────
 
   const svg = document.getElementById('table-svg');
+  // Explicit width/height give the SVG its intrinsic aspect ratio so that
+  // CSS "height: auto" scales proportionally. The viewBox is also set so that
+  // all internal drawing code uses the fixed coordinate system regardless of
+  // the rendered pixel size.
   svg.setAttribute('width', SVG_WIDTH);
   svg.setAttribute('height', SVG_HEIGHT);
   svg.setAttribute('viewBox', `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`);
@@ -673,6 +677,115 @@ function initApp() {
   objBallEl.classList.add('draggable');
   svg.appendChild(objBallEl);
 
+  // ── Legend (lower-left, overlaid on table) ─────────────────────────────────
+
+  const LEGEND_ITEMS = [
+    { fill: 'rgba(60,130,255,0.5)',  stroke: 'rgba(60,130,255,0.8)', label: 'Aim error (±Δφ)' },
+    { fill: 'rgba(255,60,60,0.5)',   stroke: 'rgba(255,60,60,0.8)',  label: 'OB direction error (±Δθ)' },
+    { fill: '#ffe066',               stroke: '#c8a000',              label: 'Effective pocket window' },
+    { fill: 'rgba(255,160,60,0.6)',  stroke: 'rgba(255,160,60,0.8)', label: 'Actual OB path (w/ throw)' },
+  ];
+  const LEG_PAD_X = 10, LEG_PAD_Y = 8, LEG_ROW_H = 18;
+  const LEG_SWATCH_W = 16, LEG_SWATCH_H = 10, LEG_FONT = 11;
+  const LEG_W = 195;
+  const LEG_H = LEG_PAD_Y * 2 + LEGEND_ITEMS.length * LEG_ROW_H;
+  const LEG_X = SVG_BORDER + 8;
+  const LEG_Y = SVG_HEIGHT - SVG_BORDER - LEG_H - 8;
+
+  const legendG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+  const legendBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  legendBg.setAttribute('x', LEG_X);
+  legendBg.setAttribute('y', LEG_Y);
+  legendBg.setAttribute('width', LEG_W);
+  legendBg.setAttribute('height', LEG_H);
+  legendBg.setAttribute('fill', 'rgba(0,0,0,0.55)');
+  legendBg.setAttribute('rx', 4);
+  legendG.appendChild(legendBg);
+
+  LEGEND_ITEMS.forEach((item, i) => {
+    const rowY = LEG_Y + LEG_PAD_Y + i * LEG_ROW_H;
+
+    const swatch = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    swatch.setAttribute('x', LEG_X + LEG_PAD_X);
+    swatch.setAttribute('y', rowY + (LEG_ROW_H - LEG_SWATCH_H) / 2);
+    swatch.setAttribute('width', LEG_SWATCH_W);
+    swatch.setAttribute('height', LEG_SWATCH_H);
+    swatch.setAttribute('fill', item.fill);
+    swatch.setAttribute('stroke', item.stroke);
+    swatch.setAttribute('stroke-width', 1);
+    swatch.setAttribute('rx', 2);
+    legendG.appendChild(swatch);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', LEG_X + LEG_PAD_X + LEG_SWATCH_W + 6);
+    label.setAttribute('y', rowY + LEG_ROW_H / 2 + LEG_FONT * 0.35);
+    label.setAttribute('font-size', LEG_FONT);
+    label.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+    label.setAttribute('fill', '#ccc');
+    label.textContent = item.label;
+    legendG.appendChild(label);
+  });
+
+  svg.appendChild(legendG);
+
+  // ── Make % display (upper-right, overlaid on table) ────────────────────────
+
+  const MAKE_LABEL_FONT = 12;
+  const MAKE_VALUE_FONT = 18;
+  const MAKE_PAD_Y = 7;
+  const MAKE_W = 118;
+  const MAKE_H = MAKE_PAD_Y * 2 + MAKE_LABEL_FONT + 5 + MAKE_VALUE_FONT;
+  const MAKE_X = SVG_BORDER + 8;
+  const MAKE_Y = SVG_BORDER + 8;
+
+  const makeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+  const makeBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  makeBg.setAttribute('x', MAKE_X);
+  makeBg.setAttribute('y', MAKE_Y);
+  makeBg.setAttribute('width', MAKE_W);
+  makeBg.setAttribute('height', MAKE_H);
+  makeBg.setAttribute('fill', 'rgba(0,0,0,0.55)');
+  makeBg.setAttribute('rx', 4);
+  makeG.appendChild(makeBg);
+
+  const makeLabelSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  makeLabelSvg.setAttribute('x', MAKE_X + MAKE_W / 2 - 6);
+  makeLabelSvg.setAttribute('y', MAKE_Y + MAKE_PAD_Y + MAKE_LABEL_FONT);
+  makeLabelSvg.setAttribute('font-size', MAKE_LABEL_FONT);
+  makeLabelSvg.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+  makeLabelSvg.setAttribute('fill', '#aaa');
+  makeLabelSvg.setAttribute('text-anchor', 'middle');
+  makeLabelSvg.textContent = 'Make probability';
+  makeG.appendChild(makeLabelSvg);
+
+  // Info icon — carries data-info so the document click handler can pick it up.
+  const makeInfoSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  makeInfoSvg.setAttribute('x', MAKE_X + MAKE_W - 7);
+  makeInfoSvg.setAttribute('y', MAKE_Y + MAKE_PAD_Y + MAKE_LABEL_FONT);
+  makeInfoSvg.setAttribute('font-size', MAKE_LABEL_FONT);
+  makeInfoSvg.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+  makeInfoSvg.setAttribute('text-anchor', 'middle');
+  makeInfoSvg.classList.add('info-btn');
+  makeInfoSvg.dataset.info = 'The probability of pocketing the ball on a standard 9-foot table (100″ × 50″), given the current execution error, throw, and compensation settings. Accounts for the full Gaussian error distribution.';
+  makeInfoSvg.textContent = '\u2139';
+  makeG.appendChild(makeInfoSvg);
+
+  const makeValueSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  makeValueSvg.setAttribute('x', MAKE_X + MAKE_W / 2);
+  makeValueSvg.setAttribute('y', MAKE_Y + MAKE_PAD_Y + MAKE_LABEL_FONT + 5 + MAKE_VALUE_FONT);
+  makeValueSvg.setAttribute('font-size', MAKE_VALUE_FONT);
+  makeValueSvg.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+  makeValueSvg.setAttribute('fill', '#7ec8e3');
+  makeValueSvg.setAttribute('font-weight', '700');
+  makeValueSvg.setAttribute('text-anchor', 'middle');
+  makeValueSvg.setAttribute('font-variant-numeric', 'tabular-nums');
+  makeValueSvg.textContent = '\u2014';
+  makeG.appendChild(makeValueSvg);
+
+  svg.appendChild(makeG);
+
   // ── State ──────────────────────────────────────────────────────────────────
 
   const cuePos = [...DEFAULT_CUE_BALL];
@@ -706,7 +819,7 @@ function initApp() {
 
   const slider = document.getElementById('error-slider');
   const displayDeltaPhi = document.getElementById('display-delta-phi');
-  const displayMake = document.getElementById('display-make');
+  const displayMake = makeValueSvg; // rendered in SVG, not HTML
   const displayCutAngle = document.getElementById('display-cut-angle');
   const displayDistance = document.getElementById('display-distance');
   const displayAlpha = document.getElementById('display-alpha');
@@ -755,9 +868,13 @@ function initApp() {
     redraw();
   });
 
-  // CIT adjustment toggle
+  // CIT adjustment toggle — grey out the accuracy group rather than hide it.
+  // We don't set the native `disabled` attribute on the slider because its
+  // browser-rendered disabled appearance compounds with the `.disabled` opacity
+  // and makes the control invisible. pointer-events:none on the group is
+  // sufficient to block interaction.
   citAdjustToggle.addEventListener('change', () => {
-    citAccuracyGroup.style.display = citAdjustToggle.checked ? '' : 'none';
+    citAccuracyGroup.classList.toggle('disabled', !citAdjustToggle.checked);
     redraw();
   });
 
@@ -1035,7 +1152,12 @@ function initApp() {
 
   function clientToTablePos(clientX, clientY) {
     const rect = svg.getBoundingClientRect();
-    return clampToBounds(svgToTable(clientX - rect.left, clientY - rect.top));
+    // Scale from rendered CSS pixels to SVG internal coordinate space (viewBox).
+    const cssToSvg = SVG_WIDTH / rect.width;
+    return clampToBounds(svgToTable(
+      (clientX - rect.left) * cssToSvg,
+      (clientY - rect.top) * cssToSvg,
+    ));
   }
 
   function applyDrag(pos) {
@@ -1104,32 +1226,28 @@ function initApp() {
 
   const infoPopup = document.getElementById('info-popup');
   const infoPopupText = document.getElementById('info-popup-text');
-  const controlsEl = document.getElementById('controls');
 
-  controlsEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('.info-btn');
-    if (!btn) {
-      infoPopup.style.display = 'none';
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    const text = btn.dataset.info;
-    // Toggle off if clicking the same icon
-    if (infoPopup.style.display !== 'none' && infoPopupText.textContent === text) {
-      infoPopup.style.display = 'none';
-      return;
-    }
-    infoPopupText.textContent = text;
-    const btnRect = btn.getBoundingClientRect();
-    const ctrlRect = controlsEl.getBoundingClientRect();
-    infoPopup.style.left = Math.max(0, btnRect.left - ctrlRect.left) + 'px';
-    infoPopup.style.top = (btnRect.bottom - ctrlRect.top + 6) + 'px';
-    infoPopup.style.display = '';
-  });
-
+  // Single document-level handler covers info buttons anywhere on the page
+  // (including the make % banner which is outside #controls).
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#controls')) {
+    const btn = e.target.closest('.info-btn');
+    if (btn) {
+      // Prevent label default action (e.g., toggling a nearby checkbox).
+      e.preventDefault();
+      const text = btn.dataset.info;
+      // Toggle off if clicking the same icon again.
+      if (infoPopup.style.display !== 'none' && infoPopupText.textContent === text) {
+        infoPopup.style.display = 'none';
+        return;
+      }
+      infoPopupText.textContent = text;
+      const btnRect = btn.getBoundingClientRect();
+      // Keep popup inside viewport horizontally.
+      const left = Math.min(window.innerWidth - 292, Math.max(4, btnRect.left));
+      infoPopup.style.left = left + 'px';
+      infoPopup.style.top = (btnRect.bottom + 6) + 'px';
+      infoPopup.style.display = '';
+    } else if (!e.target.closest('#info-popup')) {
       infoPopup.style.display = 'none';
     }
   });

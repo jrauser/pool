@@ -56,3 +56,26 @@ To begin let's the render one side pocket on the top of the table.  Add a toggle
 
 Let me test, and then as a final step we can render all the pockets on the table by means of rotation/reflection.  Id also like to add diamonds to the table.  A standard pool table has three diamond between any pair of pockets.  They are placed 1/4, 1/2 and 3/4 of the distance between the pockets.
 
+# V3.2: Visual redesign
+
+I'd like to rearrange the components of the app. Instead of two columns, I'd like a single column.  Starting from the top:
+
+
+* Make Percentage: ###.#%
+
+* The Pool Table (the color legend is overlaid on the pool table in the lower left)
+
+* The controls in two columns:
+  * Target pocket | Shot speed
+  *  Execution error slider | Corect for throw
+  *                     | Throw correction slider
+
+* The outputs in two columns:
+
+Notice that the title "Pool Shot Margin Visualizer" is gone.
+
+I'm going to want to make this work on mobile, so the more compact the better.  It's ok if there are two different layouts: more generous on dekstop, more compact on mobile.
+
+
+
+
