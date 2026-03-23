@@ -769,7 +769,7 @@ function initApp() {
   makeInfoSvg.setAttribute('text-anchor', 'middle');
   makeInfoSvg.classList.add('info-btn');
   makeInfoSvg.dataset.info = 'The probability of pocketing the ball on a standard 9-foot table (100″ × 50″), given the current execution error, throw, and compensation settings. Accounts for the full Gaussian error distribution.';
-  makeInfoSvg.textContent = '\u2139';
+  makeInfoSvg.textContent = '\u24d8';
   makeG.appendChild(makeInfoSvg);
 
   const makeValueSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
