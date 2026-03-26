@@ -825,6 +825,8 @@ function initApp() {
   const displayAlpha = document.getElementById('display-alpha');
   const displayTargetSize = document.getElementById('display-target-size');
   const displayThrow = document.getElementById('display-throw');
+  const displayArcLength = document.getElementById('display-arc-length');
+  const labelArcDeltaPhi = document.getElementById('label-arc-deltaphi');
   const degenerateMsg = document.getElementById('degenerate-msg');
 
   // CIT controls
@@ -1071,6 +1073,9 @@ function initApp() {
     displayAlpha.textContent = ((alpha * 180) / Math.PI).toFixed(2) + '\u00b0';
     displayTargetSize.textContent = targetSize.toFixed(2) + '"';
     displayThrow.textContent = ((tThrow * 180) / Math.PI).toFixed(2) + '\u00b0';
+    const arcMm = 2 * deltaPhiRad * d * 25.4;
+    labelArcDeltaPhi.textContent = deltaPhiDeg.toFixed(2);
+    displayArcLength.textContent = arcMm.toFixed(1) + ' mm';
 
     // Cue cone: ±Δφ about the cue→ghost ball direction
     const cgSvgDx = ghostSvgX - cueSvgX;
@@ -1137,6 +1142,11 @@ function initApp() {
       displayTargetSize.textContent = targetSize.toFixed(2) + '"';
       displayThrow.textContent = '\u2014';
       displayDeltaPhi.textContent = parseFloat(slider.value).toFixed(2) + '\u00b0';
+      const sliderVal = parseFloat(slider.value);
+      const sliderRad = (sliderVal * Math.PI) / 180;
+      const arcMm = 2 * sliderRad * d * 25.4;
+      labelArcDeltaPhi.textContent = sliderVal.toFixed(2);
+      displayArcLength.textContent = arcMm.toFixed(1) + ' mm';
       degenerateMsg.style.display = 'block';
       thrownTravelLine.style.display = 'none';
       return;
@@ -1186,7 +1196,7 @@ function initApp() {
     e.preventDefault();
   });
 
-  svg.addEventListener('mousemove', (e) => {
+  document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
     applyDrag(clientToTablePos(e.clientX, e.clientY));
   });
@@ -1196,8 +1206,7 @@ function initApp() {
     svg.classList.remove('dragging');
   }
 
-  svg.addEventListener('mouseup', stopDrag);
-  svg.addEventListener('mouseleave', stopDrag);
+  document.addEventListener('mouseup', stopDrag);
 
   // Touch drag
   cueBallEl.addEventListener('touchstart', (e) => {
