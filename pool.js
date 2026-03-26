@@ -671,8 +671,8 @@ function initApp() {
   // Object ball
   const objBallEl = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   objBallEl.setAttribute('r', BALL_RADIUS * SVG_SCALE);
-  objBallEl.setAttribute('fill', '#ffe066');
-  objBallEl.setAttribute('stroke', '#c8a000');
+  objBallEl.setAttribute('fill', '#8b2020');
+  objBallEl.setAttribute('stroke', '#5a1515');
   objBallEl.setAttribute('stroke-width', 1);
   objBallEl.classList.add('draggable');
   svg.appendChild(objBallEl);
@@ -734,7 +734,7 @@ function initApp() {
   const MAKE_LABEL_FONT = 12;
   const MAKE_VALUE_FONT = 18;
   const MAKE_PAD_Y = 7;
-  const MAKE_W = 118;
+  const MAKE_W = 128;
   const MAKE_H = MAKE_PAD_Y * 2 + MAKE_LABEL_FONT + 5 + MAKE_VALUE_FONT;
   const MAKE_X = SVG_BORDER + 8;
   const MAKE_Y = SVG_BORDER + 8;
@@ -762,7 +762,7 @@ function initApp() {
 
   // Info icon — carries data-info so the document click handler can pick it up.
   const makeInfoSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  makeInfoSvg.setAttribute('x', MAKE_X + MAKE_W - 7);
+  makeInfoSvg.setAttribute('x', MAKE_X + MAKE_W - 12);
   makeInfoSvg.setAttribute('y', MAKE_Y + MAKE_PAD_Y + MAKE_LABEL_FONT);
   makeInfoSvg.setAttribute('font-size', MAKE_LABEL_FONT);
   makeInfoSvg.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
@@ -785,6 +785,98 @@ function initApp() {
   makeG.appendChild(makeValueSvg);
 
   svg.appendChild(makeG);
+
+  // ── Sight picture (below make %, overlaid on table) ───────────────────────
+
+  const SIGHT_BALL_R = 24; // px — fixed radius for sight picture balls
+  const SIGHT_SCALE = SIGHT_BALL_R / BALL_RADIUS; // px per inch
+  const SIGHT_PAD = 8;
+  const SIGHT_RECT_H = 6; // px — height of comparison bars
+  const SIGHT_RECT_GAP = 3; // px — gap between the two bars
+  const SIGHT_INFO_W = 18; // extra width for the info icon column
+  const SIGHT_W = 4 * SIGHT_BALL_R + 2 * SIGHT_PAD + SIGHT_INFO_W;
+  const SIGHT_H = 2 * SIGHT_BALL_R + 2 * SIGHT_PAD; // rects overlay the balls, no extra height
+  const SIGHT_X = MAKE_X;
+  const SIGHT_Y = MAKE_Y + MAKE_H + 6;
+  const SIGHT_CENTER_X = SIGHT_X + (SIGHT_W - SIGHT_INFO_W) / 2;
+  const SIGHT_CENTER_Y = SIGHT_Y + SIGHT_H / 2;
+
+  const sightG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+  const sightBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  sightBg.setAttribute('x', SIGHT_X);
+  sightBg.setAttribute('y', SIGHT_Y);
+  sightBg.setAttribute('width', SIGHT_W);
+  sightBg.setAttribute('height', SIGHT_H);
+  sightBg.setAttribute('fill', 'rgba(0,0,0,0.55)');
+  sightBg.setAttribute('rx', 4);
+  sightG.appendChild(sightBg);
+
+  // Clip path to keep rectangles inside the box
+  const sightClip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+  sightClip.setAttribute('id', 'sight-clip');
+  const sightClipRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  sightClipRect.setAttribute('x', SIGHT_X);
+  sightClipRect.setAttribute('y', SIGHT_Y);
+  sightClipRect.setAttribute('width', SIGHT_W);
+  sightClipRect.setAttribute('height', SIGHT_H);
+  sightClip.appendChild(sightClipRect);
+  sightG.appendChild(sightClip);
+
+  // Clipped content group (balls + rectangles all clip to box bounds)
+  const sightContentG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  sightContentG.setAttribute('clip-path', 'url(#sight-clip)');
+
+  // OB circle (drawn first so CB overlays it)
+  const sightOB = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  sightOB.setAttribute('r', SIGHT_BALL_R);
+  sightOB.setAttribute('cy', SIGHT_CENTER_Y);
+  sightOB.setAttribute('fill', '#8b2020');
+  sightOB.setAttribute('stroke', '#5a1515');
+  sightOB.setAttribute('stroke-width', 1);
+  sightContentG.appendChild(sightOB);
+
+  // CB circle
+  const sightCB = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  sightCB.setAttribute('cx', SIGHT_CENTER_X);
+  sightCB.setAttribute('cy', SIGHT_CENTER_Y);
+  sightCB.setAttribute('r', SIGHT_BALL_R);
+  sightCB.setAttribute('fill', 'white');
+  sightCB.setAttribute('stroke', '#ccc');
+  sightCB.setAttribute('stroke-width', 1);
+  sightContentG.appendChild(sightCB);
+
+  // Target window rectangle (yellow, on top)
+  const sightTgtRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  sightTgtRect.setAttribute('height', SIGHT_RECT_H);
+  sightTgtRect.setAttribute('fill', 'rgba(255,200,50,0.6)');
+  sightTgtRect.setAttribute('stroke', '#daa520');
+  sightTgtRect.setAttribute('stroke-width', 1.5);
+  sightContentG.appendChild(sightTgtRect);
+
+  // Execution error rectangle (blue, on bottom)
+  const sightErrRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  sightErrRect.setAttribute('height', SIGHT_RECT_H);
+  sightErrRect.setAttribute('fill', 'rgba(60,130,255,0.5)');
+  sightErrRect.setAttribute('stroke', 'rgba(60,130,255,0.9)');
+  sightErrRect.setAttribute('stroke-width', 1.5);
+  sightContentG.appendChild(sightErrRect);
+
+  sightG.appendChild(sightContentG);
+
+  // Info icon
+  const sightInfoSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  sightInfoSvg.setAttribute('x', SIGHT_X + SIGHT_W - SIGHT_PAD - 4);
+  sightInfoSvg.setAttribute('y', SIGHT_Y + SIGHT_PAD + 10);
+  sightInfoSvg.setAttribute('font-size', 12);
+  sightInfoSvg.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+  sightInfoSvg.setAttribute('text-anchor', 'middle');
+  sightInfoSvg.classList.add('info-btn');
+  sightInfoSvg.dataset.info = 'Sight picture: the view along the aim line at the moment of contact. The white circle is the cue ball; the red circle is the object ball. The blue bar shows the width of your execution error (\u00b1\u0394\u03c6) at the object ball. The yellow bar shows the apparent width of the pocket window from this angle. When the yellow bar is wider than the blue bar, you have margin to spare.';
+  sightInfoSvg.textContent = '\u24d8';
+  sightG.appendChild(sightInfoSvg);
+
+  svg.appendChild(sightG);
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -1118,6 +1210,47 @@ function initApp() {
     } else {
       objCone.setAttribute('points', '');
     }
+
+    // Sight picture update
+    updateSightPicture(phi, d, deltaPhiRad, alpha);
+  }
+
+  function updateSightPicture(phi, d, deltaPhiRad, alpha) {
+    sightG.style.display = '';
+
+    // Determine cut direction: cross product of (CB→ghost) × (CB→OB) in SVG coords.
+    // Positive = OB is to the right of the aim line as seen by the shooter.
+    const aimX = ghostSvgX - cueSvgX;
+    const aimY = ghostSvgY - cueSvgY;
+    const toObjX = objSvgX - cueSvgX;
+    const toObjY = objSvgY - cueSvgY;
+    const cross = aimX * toObjY - aimY * toObjX;
+    const cutSign = cross >= 0 ? 1 : -1;
+
+    // OB lateral offset from CB (in sight picture pixels)
+    const offsetPx = 2 * BALL_RADIUS * Math.sin(phi) * SIGHT_SCALE;
+    // Center the pair: each ball shifts half the offset from center
+    const cbX = SIGHT_CENTER_X - cutSign * offsetPx / 2;
+    sightCB.setAttribute('cx', cbX);
+    sightOB.setAttribute('cx', SIGHT_CENTER_X + cutSign * offsetPx / 2);
+
+    // Rectangle vertical positions: target on top, error on bottom
+    const rectTopY = SIGHT_CENTER_Y - SIGHT_RECT_GAP / 2 - SIGHT_RECT_H;
+    const rectBotY = SIGHT_CENTER_Y + SIGHT_RECT_GAP / 2;
+
+    // Rectangles centered on the CB (the shooter's aim point)
+    // Error rectangle: width = 2 × Δφ × d (inches), converted to px
+    const errWidthPx = 2 * deltaPhiRad * d * SIGHT_SCALE;
+    sightErrRect.setAttribute('x', cbX - errWidthPx / 2);
+    sightErrRect.setAttribute('width', errWidthPx);
+    sightErrRect.setAttribute('y', rectBotY);
+
+    // Target rectangle: pocket tolerance sector projected to contact distance (2R)
+    // and foreshortened by viewing angle. Width = 4R × tan(α) × cos(φ).
+    const tgtWidthPx = 4 * SIGHT_BALL_R * Math.tan(alpha) * Math.cos(phi);
+    sightTgtRect.setAttribute('x', cbX - tgtWidthPx / 2);
+    sightTgtRect.setAttribute('width', tgtWidthPx);
+    sightTgtRect.setAttribute('y', rectTopY);
   }
 
   function redraw() {
@@ -1147,6 +1280,7 @@ function initApp() {
       const arcMm = 2 * sliderRad * d * 25.4;
       labelArcDeltaPhi.textContent = sliderVal.toFixed(2);
       displayArcLength.textContent = arcMm.toFixed(1) + ' mm';
+      sightG.style.display = 'none';
       degenerateMsg.style.display = 'block';
       thrownTravelLine.style.display = 'none';
       return;

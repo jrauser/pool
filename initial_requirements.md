@@ -76,6 +76,22 @@ Notice that the title "Pool Shot Margin Visualizer" is gone.
 
 I'm going to want to make this work on mobile, so the more compact the better.  It's ok if there are two different layouts: more generous on dekstop, more compact on mobile.
 
+# V3.2.1: Minor tweaks
 
+I'd like to add one more value to the output section at the bottom: the arclength of the error cone at the object ball in millimeters.  The label can be "Arc length of +- #.# degrees at OB: ##.# mm" where the first variable is from the execution error slider, and the second is the arclength at the distance between the CB and OB.
 
+A small nit: In the browser, if you drag a ball outside of the pool table area, you "let go" of it.  That is, the ball stops moving and even if you bring your mouse back into the table's area the ball won't move.  This doesn't happen on mobile.  
+
+# V3.3: Add sight picture
+
+I'd like to add a "sight picture" showing the overlap between the object ball and cue ball based on the cut angle.  That is, the image you would see along the CB's line at the moment of contact.  This would live in the upper left, below the make probability readout.  
+
+Additionally, there should be two rectangles. First, a blue rectangle showing the size of the cue ball execution error cone at the moment of contact.  Second, a yellow rectangle showing the size of the target area on the object ball, again from along the cue ball's line of aim (that is, from the shooter's point of view).  So, for a thin cut, this target size rectangle would be very small (being viewed at an angle).
+
+The two rectangles stack on top of each other.  The top one being the target area and the bottom the CB error cone.  Like this, centered vertically on the CB/OB overlap sight picture:
+
+    <--->
+<---------->  
+
+The colors (blue and yellow) match with the color of the cue ball error cone and packet window respectively.  Because the object ball right now is yellow we need to pick a different color for it.  Maybe red?
 
