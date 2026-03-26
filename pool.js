@@ -727,6 +727,7 @@ function initApp() {
     legendG.appendChild(label);
   });
 
+  legendG.setAttribute('pointer-events', 'none');
   svg.appendChild(legendG);
 
   // ── Make % display (upper-right, overlaid on table) ────────────────────────
@@ -784,6 +785,8 @@ function initApp() {
   makeValueSvg.textContent = '\u2014';
   makeG.appendChild(makeValueSvg);
 
+  makeG.setAttribute('pointer-events', 'none');
+  makeInfoSvg.setAttribute('pointer-events', 'auto');
   svg.appendChild(makeG);
 
   // ── Sight picture (below make %, overlaid on table) ───────────────────────
@@ -876,6 +879,8 @@ function initApp() {
   sightInfoSvg.textContent = '\u24d8';
   sightG.appendChild(sightInfoSvg);
 
+  sightG.setAttribute('pointer-events', 'none');
+  sightInfoSvg.setAttribute('pointer-events', 'auto');
   svg.appendChild(sightG);
 
   // ── State ──────────────────────────────────────────────────────────────────
