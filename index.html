@@ -58,13 +58,13 @@
 
         <div id="cit-accuracy-group" class="control-group disabled">
           <label for="cit-slider">
-            Throw compensation accuracy: <span id="display-cit-error">—</span> <span class="info-btn" data-info="How precisely the player compensates for throw, as a percentage of the full throw angle. At 10%, the player's compensation accuracy has a 95% confidence interval of ±10% of the throw angle.">&#9432;</span>
+            Throw compensation error: <span id="display-cit-error">—</span> <span class="info-btn" data-info="The player's error in compensating for throw, as a percentage of the full throw angle. At 10%, the 95% confidence interval of the compensation error is ±10% of the throw angle. Higher values mean less precise compensation.">&#9432;</span>
           </label>
           <input
             type="range"
             id="cit-slider"
             min="0"
-            max="30"
+            max="100"
             step="1"
             value="30"
           />
